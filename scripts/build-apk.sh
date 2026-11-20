@@ -6,7 +6,7 @@ set -euo pipefail
 # 1. 取消拍價標與 OCR 辨識，改為長輩友善的「🔍 相機高倍率放大鏡」(支援 1x/2x/3x/5x 放大、定格畫面拿近看、高對比濾鏡、邊看邊輸入標價與容量)
 # 2. 底價紀錄分頁支援「手勢左滑刪除 (Swipe-Left to Delete)」以及頂部「🗑️ 一鍵清除全部紀錄」按鈕
 
-SDK_ROOT="/home/antigravity/android-sdk"
+SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/antigravity/android-sdk}}"
 BUILD_TOOLS="${SDK_ROOT}/build-tools/34.0.0"
 ANDROID_JAR="${SDK_ROOT}/platforms/android-34/android.jar"
 
@@ -15,7 +15,7 @@ D8="${BUILD_TOOLS}/d8"
 ZIPALIGN="${BUILD_TOOLS}/zipalign"
 APKSIGNER="${BUILD_TOOLS}/apksigner"
 
-PROJECT_ROOT="/home/antigravity/hihiwhgan/Smart-Grocery-Unit-Price-Comparator-"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACT_DIR="/home/antigravity/.gemini/jetski/brain/v1/default/jetski_remote_agents_3p/457f6785-9ed6-4385-9819-1029b9781a12"
 WORK_DIR="/tmp/android_apk_build"
 
@@ -1228,6 +1228,8 @@ FINAL_APK_ARTIFACT="${ARTIFACT_DIR}/SmartGroceryComparator-v1.0.0.apk"
 "${APKSIGNER}" verify --verbose "${FINAL_APK_REPO}"
 
 cp "${FINAL_APK_REPO}" "${FINAL_APK_ROOT}"
-cp "${FINAL_APK_REPO}" "${FINAL_APK_ARTIFACT}"
+if [ -d "${ARTIFACT_DIR}" ]; then
+  cp "${FINAL_APK_REPO}" "${FINAL_APK_ARTIFACT}"
+fi
 
-ls -lh "${FINAL_APK_REPO}" "${FINAL_APK_ROOT}" "${FINAL_APK_ARTIFACT}"
+ls -lh "${FINAL_APK_REPO}" "${FINAL_APK_ROOT}"

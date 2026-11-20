@@ -26,24 +26,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Ensure Android SDK Platform 34 & Build-Tools 34.0.0
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager | head -n 1)
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Run unit tests
+      - name: Run unit price & logic tests
         run: npm test
 
-      - name: Expo Prebuild Android project
-        run: npx expo prebuild --platform android --no-install
+      - name: Build and Sign Release Android APK
+        run: |
+          chmod +x ./scripts/build-apk.sh
+          ./scripts/build-apk.sh
 
-      - name: Build Android Release APK with Gradle
-        working-directory: ./android
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Upload Android APK Artifact
+      - name: Upload Signed Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: smart-grocery-comparator-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: SmartGroceryComparator-v1.2.0-apk
+          path: |
+            SmartGroceryComparator-v1.0.0.apk
+            release/SmartGroceryComparator-v1.0.0-release.apk
