@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "賣場極簡比價王",
+    "slug": "smart-grocery-unit-price-comparator",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "grocery-comparator",
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smartgrocery.unitpricecomparator",
+      "infoPlist": {
+        "NSCameraUsageDescription": "需要使用相機拍攝賣場貨架價格牌進行離線 OCR 文字辨識與條碼掃描",
+        "NSLocationWhenInUseUsageDescription": "需要使用定位服務自動判斷您當前所在的賣場（如全聯、家樂福、好市多）並記錄底價"
+      }
+    },
+    "android": {
+      "package": "com.smartgrocery.unitpricecomparator",
+      "adaptiveIcon": {
+        "backgroundColor": "#2E7D32"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "允許「賣場極簡比價王」使用相機拍攝價格牌與掃描條碼"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "允許「賣場極簡比價王」透過 GPS 自動帶入當前所在的賣場名稱"
+        }
+      ]
+    ]
+  }
+}
