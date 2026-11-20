@@ -60,25 +60,25 @@ export default function AppMainScreen() {
     INITIAL_SEED_RECORDS
   );
 
-  // 多商品動態比價卡片列表（預設顯示「商品 1」與「商品 2」）
+  // 多商品動態比價卡片列表（預設顯示空白的「商品 1」與「商品 2」）
   const [items, setItems] = useState<ComparisonItem[]>([
     {
       id: 'item-1',
-      title: '舒潔三層抽取式衛生紙 (110抽x24包)',
-      priceInput: '339',
-      quantityInput: '2640',
+      title: '商品 1',
+      priceInput: '',
+      quantityInput: '',
       packCountInput: '1',
-      unit: '抽',
+      unit: 'g',
       promo: 'NONE',
     },
     {
       id: 'item-2',
-      title: '春風超細柔抽取衛生紙 (110抽x12包)',
-      priceInput: '358',
-      quantityInput: '1320',
+      title: '商品 2',
+      priceInput: '',
+      quantityInput: '',
       packCountInput: '1',
-      unit: '抽',
-      promo: 'BOGO',
+      unit: 'g',
+      promo: 'NONE',
     },
   ]);
 

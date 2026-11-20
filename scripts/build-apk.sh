@@ -416,8 +416,8 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     }
 
     let items = [
-      { id: 'c1', title: '舒潔三層抽取式衛生紙 (110抽x24包)', price: '339', qty: '2640', unit: '抽', promo: 'NONE' },
-      { id: 'c2', title: '春風超細柔抽取衛生紙 (110抽x12包)', price: '358', qty: '1320', unit: '抽', promo: 'BOGO' }
+      { id: 'c1', title: '商品 1', price: '', qty: '', unit: 'g', promo: 'NONE' },
+      { id: 'c2', title: '商品 2', price: '', qty: '', unit: 'g', promo: 'NONE' }
     ];
     let target = { id: 'c1', field: 'price' };
 
