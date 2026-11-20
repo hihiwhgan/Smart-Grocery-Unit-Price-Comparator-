@@ -5,8 +5,8 @@
  * - 白底黑字大字體、高對比視覺設計。
  * - 最划算選項（isWinner）：高飽和綠色（#2E7D32）粗邊框 + 皇冠圖示 + 「比第二名省 X%」醒目徽章。
  * - 較貴或歷史比對漲價：警示橘紅色（#D32F2F）標示。
+ * - 取消複雜的拍價標與 OCR 辨識，改設長輩友善的「🔍 放大鏡」按鈕，一鍵開啟相機放大鏡看清楚微小標價與容量。
  * - 內建常用單位快捷選擇鈕（g、ml、抽、入、包）與促銷折扣一鍵換算（買一送一、第二件5折、85折、打8折）。
- * - 點擊「總價格」或「總容量/數量」輸入框時，不彈出系統小鍵盤，而是喚起固定於螢幕下半部的大型數字鍵盤。
  */
 
 import React from 'react';
@@ -39,8 +39,7 @@ interface ProductComparisonCardProps {
   onSelectUnit: (id: string, unit: UnitType) => void;
   onSelectPromo: (id: string, promo: PromoType) => void;
   onRemoveItem: (id: string) => void;
-  onOpenCameraOcr: (id: string) => void;
-  onOpenBarcodeScan: (id: string) => void;
+  onOpenMagnifier: (id: string) => void;
   onSaveToNotebook: (id: string) => void;
 }
 
@@ -55,8 +54,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
   onSelectUnit,
   onSelectPromo,
   onRemoveItem,
-  onOpenCameraOcr,
-  onOpenBarcodeScan,
+  onOpenMagnifier,
   onSaveToNotebook,
 }) => {
   const isPriceFocused =
@@ -83,7 +81,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         </View>
       )}
 
-      {/* 頂部標題列：商品名稱 + 相機拍照 OCR + 條碼掃描 + 刪除鈕 */}
+      {/* 頂部標題列：商品名稱 + 🔍 相機放大鏡按鈕 + 刪除鈕 */}
       <View style={styles.headerRow}>
         <View style={styles.titleBadge}>
           <Text style={styles.indexNumber}>#{index + 1}</Text>
@@ -96,22 +94,13 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
           placeholderTextColor="#757575"
         />
 
-        {/* 相機 OCR 價標辨識按鈕 */}
+        {/* 長輩友善相機放大鏡按鈕 */}
         <TouchableOpacity
-          style={styles.cameraButton}
-          onPress={() => onOpenCameraOcr(item.id)}
-          accessibilityLabel="拍照辨識價標"
+          style={styles.magnifierButton}
+          onPress={() => onOpenMagnifier(item.id)}
+          accessibilityLabel="開啟相機放大鏡看價標"
         >
-          <Text style={styles.cameraButtonText}>📷 拍價標</Text>
-        </TouchableOpacity>
-
-        {/* 條碼掃描按鈕 */}
-        <TouchableOpacity
-          style={styles.barcodeButton}
-          onPress={() => onOpenBarcodeScan(item.id)}
-          accessibilityLabel="掃描商品條碼"
-        >
-          <Text style={styles.barcodeButtonText}>🏷️ 條碼</Text>
+          <Text style={styles.magnifierButtonText}>🔍 放大鏡</Text>
         </TouchableOpacity>
 
         {totalItemsCount > 2 && (
@@ -368,31 +357,18 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
     paddingVertical: 2,
   },
-  cameraButton: {
+  magnifierButton: {
     backgroundColor: '#E8F5E9',
     borderWidth: 1.5,
     borderColor: '#2E7D32',
-    borderRadius: 8,
-    paddingHorizontal: 9,
+    borderRadius: 10,
+    paddingHorizontal: 11,
     paddingVertical: 6,
   },
-  cameraButtonText: {
+  magnifierButtonText: {
     color: '#1B5E20',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  barcodeButton: {
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#BDBDBD',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  barcodeButtonText: {
-    color: '#333333',
-    fontWeight: '700',
-    fontSize: 13,
+    fontWeight: '900',
+    fontSize: 15,
   },
   deleteButton: {
     paddingHorizontal: 8,

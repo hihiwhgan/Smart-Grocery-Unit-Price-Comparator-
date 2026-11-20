@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 賣場極簡比價王 (Smart Grocery Unit Price Comparator) - 真實 GPS + 真實相機拍標 + 原生 SQLite Android APK 自動編譯腳本
-# 使用 Android SDK Build-Tools 34.0.0 (aapt2, d8, zipalign, apksigner) 與 OpenJDK 17
+# 賣場極簡比價王 (Smart Grocery Unit Price Comparator) - v1.2.0
+# 功能升級：
+# 1. 取消拍價標與 OCR 辨識，改為長輩友善的「🔍 相機高倍率放大鏡」(支援 1x/2x/3x/5x 放大、定格畫面拿近看、高對比濾鏡、邊看邊輸入標價與容量)
+# 2. 底價紀錄分頁支援「手勢左滑刪除 (Swipe-Left to Delete)」以及頂部「🗑️ 一鍵清除全部紀錄」按鈕
 
 SDK_ROOT="/home/antigravity/android-sdk"
 BUILD_TOOLS="${SDK_ROOT}/build-tools/34.0.0"
@@ -27,18 +29,19 @@ mkdir -p "${WORK_DIR}/compiled_res"
 mkdir -p "${WORK_DIR}/classes"
 mkdir -p "${WORK_DIR}/dex"
 
-# 1. 建立 AndroidManifest.xml (包含真實相機、真實 GPS 定位權限與完全離線支援)
+# 1. 建立 AndroidManifest.xml (包含真實相機放大鏡、手電筒補光、真實 GPS 定位權限)
 cat << 'EOF' > "${WORK_DIR}/AndroidManifest.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.smartgrocery.unitpricecomparator"
-    android:versionCode="2"
-    android:versionName="1.1.0">
+    android:versionCode="3"
+    android:versionName="1.2.0">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
 
-    <!-- 手機原生硬體權限：真實相機拍照與即時鏡頭取景、真實 GPS 衛星與網路定位 -->
+    <!-- 手機原生硬體權限：真實相機放大鏡鏡頭取景、手電筒補光、真實 GPS 衛星與網路定位 -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -91,7 +94,7 @@ cat << 'EOF' > "${WORK_DIR}/res/values/strings.xml"
 </resources>
 EOF
 
-# 3. 建立整合真實 Android Native Hardware Bridge (真實 GPS LocationManager + 真實相機拍標 MediaStore.ACTION_IMAGE_CAPTURE & 鏡頭取景 + 原生 SQLiteDatabase) 的前端介面
+# 3. 建立整合「長輩友善真實相機放大鏡」與「左滑刪除 + 一鍵清除底價紀錄」的前端介面
 cat << 'EOF' > "${WORK_DIR}/assets/index.html"
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -120,12 +123,8 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     .card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
     .badge-num { background: #1B5E20; color: #FFFFFF; font-size: 13px; font-weight: 900; padding: 3px 7px; border-radius: 6px; }
     .title-input { flex: 1; font-size: 17px; font-weight: 900; color: #111111; border: none; border-bottom: 1.5px solid #D1D5DB; background: transparent; padding: 2px 0; user-select: text; }
-    .btn-ocr { background: #E8F5E9; border: 1.5px solid #2E7D32; color: #1B5E20; border-radius: 8px; padding: 5px 9px; font-size: 13px; font-weight: 900; }
+    .btn-magnifier { background: #E8F5E9; border: 2px solid #2E7D32; color: #1B5E20; border-radius: 10px; padding: 5px 10px; font-size: 14px; font-weight: 900; }
     .btn-del { background: transparent; border: none; font-size: 18px; font-weight: 900; color: #9CA3AF; padding: 2px 6px; }
-
-    .captured-tag-row { display: flex; align-items: center; gap: 8px; background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 10px; padding: 6px 8px; margin-bottom: 8px; }
-    .captured-thumb { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; border: 1.5px solid #2E7D32; }
-    .captured-meta { flex: 1; font-size: 12px; font-weight: 800; color: #1B5E20; }
 
     .alert-box { border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 14px; font-weight: 900; border: 1.5px solid; }
     .alert-green { background: #E8F5E9; border-color: #2E7D32; color: #2E7D32; }
@@ -158,7 +157,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     .thumb-dock { background: #E5E7EB; border-top: 2px solid #9CA3AF; padding: 8px 10px; flex-shrink: 0; }
     .thumb-actions { display: flex; gap: 6px; margin-bottom: 6px; }
     .btn-add { flex: 1.15; background: #111111; color: #FFFFFF; border: none; border-radius: 12px; padding: 10px; font-size: 15px; font-weight: 900; }
-    .btn-cam { flex: 1.1; background: #2E7D32; color: #FFFFFF; border: none; border-radius: 12px; padding: 10px; font-size: 15px; font-weight: 900; }
+    .btn-cam { flex: 1.15; background: #2E7D32; color: #FFFFFF; border: none; border-radius: 12px; padding: 10px; font-size: 15px; font-weight: 900; }
     .btn-fold { background: #D1D5DB; color: #111111; border: none; border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 900; }
     .target-hint { background: #E8F5E9; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px; font-size: 13px; font-weight: 800; color: #1F2937; }
     .keypad-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 6px; }
@@ -174,67 +173,98 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     .nav-item { border: none; font-size: 17px; font-weight: 900; background: #F9FAFB; color: #4B5563; }
     .nav-item.active { background: #111111; color: #FFFFFF; }
 
+    /* 底價紀錄分頁 + 左滑刪除 + 一鍵清除全部 */
     .history-panel { flex: 1; overflow-y: auto; padding: 12px; background: #F3F4F6; }
+    .history-top-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .swipe-tip { font-size: 13px; font-weight: 900; color: #374151; flex: 1; }
+    .btn-clear-all { background: #D32F2F; color: #FFFFFF; border: none; border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 900; flex-shrink: 0; }
+    .btn-clear-all:disabled { background: #BDBDBD; }
     .search-input { width: 100%; border: 2px solid #111111; border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: 800; margin-bottom: 10px; background: #FFFFFF; user-select: text; }
+
+    /* 左滑刪除容器 */
+    .swipe-wrapper { position: relative; margin-bottom: 12px; border-radius: 16px; overflow: hidden; background: #D32F2F; }
+    .swipe-delete-bg { position: absolute; top: 0; bottom: 0; right: 0; width: 96px; background: #D32F2F; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; z-index: 1; }
+    .swipe-card-fg { position: relative; z-index: 2; background: #FFFFFF; border: 2px solid #D1D5DB; border-radius: 16px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; transition: transform 0.18s ease-out; touch-action: pan-y; }
+
     .toast { position: fixed; top: 14px; left: 14px; right: 14px; background: #1B5E20; color: #FFFFFF; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 900; z-index: 2000; box-shadow: 0 6px 16px rgba(0,0,0,0.25); display: none; }
 
-    /* 真實相機拍標 & 價標文字解析視窗 Modal */
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1500; display: none; align-items: flex-end; justify-content: center; }
-    .modal-sheet { width: 100%; max-height: 92%; background: #FFFFFF; border-top-left-radius: 22px; border-top-right-radius: 22px; padding: 14px; overflow-y: auto; }
-    .cam-box { position: relative; width: 100%; height: 220px; background: #000000; border-radius: 14px; overflow: hidden; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; }
-    .cam-video { width: 100%; height: 100%; object-fit: cover; }
-    .cam-reticle { position: absolute; width: 82%; height: 115px; border: 2.5px solid #4ADE80; border-radius: 10px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.32); }
-    .btn-native-cam { width: 100%; background: #2E7D32; color: #FFFFFF; border: none; border-radius: 12px; padding: 13px; font-size: 16px; font-weight: 900; margin-bottom: 8px; }
-    .btn-web-snap { width: 100%; background: #111111; color: #FFFFFF; border: none; border-radius: 12px; padding: 11px; font-size: 15px; font-weight: 900; margin-bottom: 10px; }
-    .ocr-parse-box { background: #F3F4F6; border: 1.5px solid #D1D5DB; border-radius: 12px; padding: 10px; margin-bottom: 10px; }
-    .ocr-input { width: 100%; border: 1.5px solid #9CA3AF; border-radius: 8px; padding: 8px 10px; font-size: 15px; font-weight: 800; margin-top: 6px; margin-bottom: 8px; background: #FFFFFF; user-select: text; }
+    /* 長輩友善「相機高倍率放大鏡」視窗 Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 1500; display: none; align-items: flex-end; justify-content: center; }
+    .modal-sheet { width: 100%; max-height: 95%; background: #FFFFFF; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 14px; overflow-y: auto; }
+    .mag-viewport { position: relative; width: 100%; height: 245px; background: #000000; border-radius: 18px; border: 4px solid #2E7D32; overflow: hidden; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; }
+    .mag-video { width: 100%; height: 100%; object-fit: cover; transform-origin: center center; transition: transform 0.15s ease-out; }
+    .mag-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.72); color: #4ADE80; font-size: 15px; font-weight: 900; padding: 4px 10px; border-radius: 8px; pointer-events: none; }
+    .mag-crosshair { position: absolute; width: 84%; height: 120px; border: 2px dashed rgba(74,222,128,0.75); border-radius: 12px; pointer-events: none; }
+    .zoom-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+    .zoom-btn { background: #F3F4F6; border: 2px solid #BDBDBD; border-radius: 12px; padding: 10px 4px; font-size: 16px; font-weight: 900; color: #111111; text-align: center; }
+    .zoom-btn.active { background: #2E7D32; border-color: #2E7D32; color: #FFFFFF; }
+    .mag-tools-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .btn-freeze { flex: 1.5; background: #111111; color: #FFFFFF; border: none; border-radius: 12px; padding: 12px; font-size: 16px; font-weight: 900; }
+    .btn-freeze.frozen { background: #D32F2F; }
+    .btn-contrast { flex: 1; background: #FFF8E1; border: 2px solid #FFB300; color: #111111; border-radius: 12px; padding: 12px; font-size: 15px; font-weight: 900; }
+    .btn-contrast.active { background: #FFB300; }
+    .mag-entry-box { background: #F9FAFB; border: 2px solid #D1D5DB; border-radius: 14px; padding: 10px; }
+    .mag-input { width: 100%; border: 2px solid #111111; border-radius: 10px; padding: 6px 10px; font-size: 24px; font-weight: 900; color: #111111; background: #FFFFFF; user-select: text; }
   </style>
 </head>
 <body>
   <div id="toast" class="toast"></div>
 
-  <!-- 真實相機拍標 Modal -->
-  <div id="cameraModal" class="modal-backdrop">
+  <!-- 長輩友善「🔍 相機高倍率放大鏡」Modal -->
+  <div id="magnifierModal" class="modal-backdrop">
     <div class="modal-sheet">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="font-size:18px;font-weight:900;" id="camModalTitle">📷 真實相機拍價標</div>
-        <button onclick="closeCameraModal()" style="background:none;border:none;font-size:22px;font-weight:900;padding:2px 8px;">✕</button>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div style="font-size:21px;font-weight:900;color:#111111;" id="magModalTitle">🔍 價標放大鏡 (3x)</div>
+          <div style="font-size:13px;font-weight:800;color:#2E7D32;">對準貨架價標看清楚「標價」與「容量」，可定格畫面拿近看</div>
+        </div>
+        <button onclick="closeMagnifier()" style="background:#F3F4F6;border:1.5px solid #D1D5DB;border-radius:10px;font-size:15px;font-weight:900;padding:6px 12px;">✕ 關閉</button>
       </div>
 
-      <!-- 即時後置鏡頭取景窗 / 已拍攝的價標照片預覽 -->
-      <div class="cam-box">
-        <video id="liveVideo" class="cam-video" autoplay playsinline muted></video>
-        <img id="capturedPreviewImg" class="cam-video" style="display:none;" />
-        <div class="cam-reticle"></div>
+      <!-- 即時放大鏡取景窗 -->
+      <div class="mag-viewport">
+        <video id="magVideo" class="mag-video" autoplay playsinline muted></video>
+        <canvas id="magFrozenCanvas" class="mag-video" style="display:none;"></canvas>
+        <div class="mag-crosshair"></div>
+        <div id="magBadgeText" class="mag-badge">🔍 目前放大 3x</div>
       </div>
 
-      <!-- 啟動 Android 原生系統相機 App 拍價標 (或 HTML5 MediaCapture) -->
-      <button class="btn-native-cam" onclick="triggerNativeAndroidCamera()">
-        📸 開啟手機系統相機拍價標 (高畫質存檔)
-      </button>
-      <input id="htmlFileCameraInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleHtmlFileCapture(event)" />
+      <!-- 1x / 2x / 3x / 5x 放大倍率切換大按鈕 -->
+      <div class="zoom-row">
+        <button id="zBtn1" class="zoom-btn" onclick="setMagnifierZoom(1)">1x 原倍</button>
+        <button id="zBtn2" class="zoom-btn" onclick="setMagnifierZoom(2)">2x 放大</button>
+        <button id="zBtn3" class="zoom-btn active" onclick="setMagnifierZoom(3)">3x 特大</button>
+        <button id="zBtn5" class="zoom-btn" onclick="setMagnifierZoom(5)">5x 超大</button>
+      </div>
 
-      <!-- 直接從上方即時取景框擷取畫面 -->
-      <button id="btnSnapLive" class="btn-web-snap" onclick="snapFromLiveVideo()">
-        ⚡ 直接從上方取景框快門拍標
-      </button>
+      <!-- 定格畫面 (不怕手抖) & 高對比清晰增強 -->
+      <div class="mag-tools-row">
+        <button id="btnFreezeFrame" class="btn-freeze" onclick="toggleFreezeMagnifier()">
+          ❄️ 定格畫面 (拿近慢慢看)
+        </button>
+        <button id="btnHighContrast" class="btn-contrast" onclick="toggleHighContrast()">
+          🔆 加強清晰度
+        </button>
+      </div>
 
-      <!-- 價標文字智慧解析與確認區 -->
-      <div class="ocr-parse-box">
-        <div style="font-size:13px;font-weight:900;color:#1B5E20;">
-          📝 價標文字智慧解析（支援輸入或貼上價標文字，自動拆解名稱、價格、容量與買一送一）：
+      <!-- 邊看放大鏡邊輸入標價與容量 -->
+      <div class="mag-entry-box">
+        <div style="font-size:13px;font-weight:900;color:#1B5E20;margin-bottom:6px;" id="magSyncHint">
+          ✍️ 看清楚後可直接在此輸入（自動同步至商品卡）：
         </div>
-        <input
-          id="ocrRawTextInput"
-          class="ocr-input"
-          type="text"
-          placeholder="例如：舒潔衛生紙 110抽x24包 特價 $339"
-        />
-        <div style="display:flex;gap:6px;">
-          <button onclick="applyParsedOcrText()" style="flex:1;background:#2E7D32;color:#FFFFFF;border:none;border-radius:10px;padding:10px;font-size:15px;font-weight:900;">
-            ✅ 解析價標並填入商品卡
-          </button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#374151;margin-bottom:2px;">總價格 (元)</div>
+            <input id="magPriceInput" class="mag-input" type="number" inputmode="decimal" placeholder="0" oninput="syncFromMagnifier()" />
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#374151;margin-bottom:2px;">總容量 / 數量</div>
+            <input id="magQtyInput" class="mag-input" type="number" inputmode="decimal" placeholder="0" oninput="syncFromMagnifier()" />
+          </div>
         </div>
+        <button onclick="closeMagnifier()" style="width:100%;background:#2E7D32;color:#FFFFFF;border:none;border-radius:12px;padding:12px;font-size:17px;font-weight:900;">
+          ✅ 看完填好，返回比價
+        </button>
       </div>
     </div>
   </div>
@@ -268,7 +298,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       <div class="thumb-dock">
         <div class="thumb-actions">
           <button class="btn-add" onclick="addProduct()">＋ 新增比價商品</button>
-          <button class="btn-cam" onclick="openCameraFor(target.id)">📷 相機拍價標</button>
+          <button class="btn-cam" onclick="openMagnifierFor(target.id)">🔍 放大鏡看標價</button>
           <button id="btnFold" class="btn-fold" onclick="togglePad()">▼ 收起</button>
         </div>
         <div id="padBody">
@@ -298,9 +328,15 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       </div>
     </div>
 
-    <!-- 分頁 2：底價紀錄 -->
+    <!-- 分頁 2：底價紀錄 (支援左滑刪除 + 一鍵清除全部) -->
     <div id="viewHistory" class="history-panel" style="display:none;">
-      <input id="searchBox" class="search-input" type="text" placeholder="🔍 搜尋商品名稱、衛生紙、鮮乳或條碼..." oninput="renderHistory()" />
+      <div class="history-top-bar">
+        <div class="swipe-tip">💡 提示：將紀錄「往左滑」即可刪除</div>
+        <button id="btnClearAllHistory" class="btn-clear-all" onclick="clearAllHistoryRecords()">
+          🗑️ 一鍵清除全部
+        </button>
+      </div>
+      <input id="searchBox" class="search-input" type="text" placeholder="🔍 搜尋商品名稱（如：衛生紙、鮮乳）..." oninput="renderHistory()" />
       <div id="storeFilters" class="pills-row" style="margin-bottom:10px;"></div>
       <div id="historyList"></div>
     </div>
@@ -321,7 +357,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       { id: 'DISCOUNT_80', label: '打8折', m: 0.8 }
     ];
 
-    // 台灣主要實體大賣場真實經緯度座標庫 (供真實 GPS Haversine 距離計算最近賣場)
     const STORE_FENCES = [
       { storeName: '全聯福利中心', district: '台北大安延吉店', lat: 25.033964, lon: 121.543378 },
       { storeName: '全聯福利中心', district: '新北板橋文化店', lat: 25.013200, lon: 121.463700 },
@@ -343,9 +378,13 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     let lastGpsCoords = { lat: null, lon: null };
     let filterStore = 'ALL';
     let padOpen = true;
+
+    // 放大鏡狀態
     let activeStream = null;
-    let currentCameraCardId = 'c1';
-    let latestCapturedPhotoDataUrl = null;
+    let currentMagnifierCardId = 'c1';
+    let currentZoomScale = 3;
+    let isMagnifierFrozen = false;
+    let isHighContrast = false;
 
     function loadInitialHistory() {
       if (window.AndroidBridge && window.AndroidBridge.loadHistoryJson) {
@@ -353,16 +392,16 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
           const raw = window.AndroidBridge.loadHistoryJson();
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (Array.isArray(parsed)) return parsed;
           }
         } catch (e) {}
       }
-      const local = JSON.parse(localStorage.getItem('smart_grocery_sqlite_v2') || 'null');
-      if (local && local.length > 0) return local;
+      const local = JSON.parse(localStorage.getItem('smart_grocery_sqlite_v3') || 'null');
+      if (Array.isArray(local)) return local;
       return [
-        { id: 'h1', name: '舒潔三層抽取式衛生紙 (110抽x24包)', store: '全聯福利中心', price: 369, qty: 2640, unit: '抽', unitPrice: 369/2640, date: '2026-11-10', barcode: '4710036003128', photo: null },
-        { id: 'h2', name: '科克蘭三層抽取衛生紙 (120抽x24包)', store: '好市多 Costco', price: 389, qty: 2880, unit: '抽', unitPrice: 389/2880, date: '2026-11-02', barcode: '0096619147281', photo: null },
-        { id: 'h3', name: '瑞穗鮮乳家庭號 (全脂 1858ml)', store: '家樂福 Carrefour', price: 169, qty: 1858, unit: 'ml', unitPrice: 169/1858, date: '2026-11-14', barcode: '4710088410134', photo: null }
+        { id: 'h1', name: '舒潔三層抽取式衛生紙 (110抽x24包)', store: '全聯福利中心', price: 369, qty: 2640, unit: '抽', unitPrice: 369/2640, date: '2026-11-10' },
+        { id: 'h2', name: '科克蘭三層抽取衛生紙 (120抽x24包)', store: '好市多 Costco', price: 389, qty: 2880, unit: '抽', unitPrice: 389/2880, date: '2026-11-02' },
+        { id: 'h3', name: '瑞穗鮮乳家庭號 (全脂 1858ml)', store: '家樂福 Carrefour', price: 169, qty: 1858, unit: 'ml', unitPrice: 169/1858, date: '2026-11-14' }
       ];
     }
 
@@ -370,15 +409,15 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
 
     function persistHistory() {
       const jsonStr = JSON.stringify(history);
-      localStorage.setItem('smart_grocery_sqlite_v2', jsonStr);
+      localStorage.setItem('smart_grocery_sqlite_v3', jsonStr);
       if (window.AndroidBridge && window.AndroidBridge.saveHistoryJson) {
         try { window.AndroidBridge.saveHistoryJson(jsonStr); } catch (e) {}
       }
     }
 
     let items = [
-      { id: 'c1', title: '舒潔三層抽取式衛生紙 (110抽x24包)', price: '339', qty: '2640', unit: '抽', promo: 'NONE', barcode: '4710036003128', photo: null },
-      { id: 'c2', title: '春風超細柔抽取衛生紙 (110抽x12包)', price: '358', qty: '1320', unit: '抽', promo: 'BOGO', barcode: '4710018009216', photo: null }
+      { id: 'c1', title: '舒潔三層抽取式衛生紙 (110抽x24包)', price: '339', qty: '2640', unit: '抽', promo: 'NONE' },
+      { id: 'c2', title: '春風超細柔抽取衛生紙 (110抽x12包)', price: '358', qty: '1320', unit: '抽', promo: 'BOGO' }
     ];
     let target = { id: 'c1', field: 'price' };
 
@@ -391,8 +430,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
     }
 
-    // 接收來自真實 GPS (Android Native LocationManager 或 navigator.geolocation) 的經緯度座標
-    window.onRealGpsLocationReceived = function(lat, lon, providerLabel) {
+    window.onRealGpsLocationReceived = function(lat, lon) {
       lastGpsCoords = { lat, lon };
       let nearest = STORE_FENCES[0];
       let minDist = Infinity;
@@ -408,181 +446,155 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       const distTxt = minDist >= 1000 ? (minDist / 1000).toFixed(1) + 'km' : minDist + 'm';
       document.getElementById('gpsText').textContent =
         `🛰️ 真實GPS (${lat.toFixed(4)}, ${lon.toFixed(4)}) · 最近：${nearest.district} (${distTxt})`;
-      toast(`🛰️ 已取得真實 GPS 座標 (${lat.toFixed(4)}, ${lon.toFixed(4)})\n自動切換至最近賣場：${nearest.storeName}`);
+      toast(`🛰️ 已取得真實 GPS 座標\n自動切換至最近賣場：${nearest.storeName}`);
     };
 
     window.onRealGpsError = function(errMsg) {
       document.getElementById('gpsText').textContent = '⚠️ GPS 定位提示：' + errMsg;
-      toast('⚠️ GPS 定位提示：' + errMsg);
     };
 
-    // 觸發真實手機 GPS 定位
     function requestRealGps() {
       document.getElementById('gpsText').textContent = '🛰️ 正在讀取手機真實 GPS 衛星定位...';
-      // 1. 優先呼叫 Android 原生 LocationManager Bridge (會自動彈出系統定位權限詢問)
       if (window.AndroidBridge && window.AndroidBridge.requestNativeGps) {
         window.AndroidBridge.requestNativeGps();
         return;
       }
-      // 2. 標準 Geolocation API
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          pos => window.onRealGpsLocationReceived(pos.coords.latitude, pos.coords.longitude, 'HTML5-GPS'),
-          err => window.onRealGpsError(err.message || '請確認已開啟手機定位權限與 GPS'),
+          pos => window.onRealGpsLocationReceived(pos.coords.latitude, pos.coords.longitude),
+          err => window.onRealGpsError(err.message || '請確認已開啟手機定位權限'),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
-      } else {
-        window.onRealGpsError('此裝置不支援 GPS 定位');
       }
     }
 
-    // 開啟真實相機拍標視窗
-    async function openCameraFor(cardId) {
-      currentCameraCardId = cardId || target.id;
-      target = { id: currentCameraCardId, field: 'price' };
-      const it = items.find(x => x.id === currentCameraCardId);
-      document.getElementById('camModalTitle').textContent = '📷 真實相機拍價標 (' + (it ? it.title : '商品') + ')';
-      document.getElementById('cameraModal').style.display = 'flex';
-      document.getElementById('capturedPreviewImg').style.display = 'none';
-      document.getElementById('liveVideo').style.display = 'block';
+    // 開啟長輩友善「🔍 相機高倍率放大鏡」
+    async function openMagnifierFor(cardId) {
+      currentMagnifierCardId = cardId || target.id;
+      target = { id: currentMagnifierCardId, field: 'price' };
+      const it = items.find(x => x.id === currentMagnifierCardId) || items[0];
 
-      // 嘗試開啟手機後置鏡頭即時取景
+      document.getElementById('magPriceInput').value = it.price || '';
+      document.getElementById('magQtyInput').value = it.qty || '';
+      document.getElementById('magSyncHint').textContent =
+        `✍️ 看清楚後可直接在此輸入（自動同步至 ${it.title}）：`;
+
+      isMagnifierFrozen = false;
+      document.getElementById('magFrozenCanvas').style.display = 'none';
+      document.getElementById('magVideo').style.display = 'block';
+      document.getElementById('btnFreezeFrame').textContent = '❄️ 定格畫面 (拿近慢慢看)';
+      document.getElementById('btnFreezeFrame').classList.remove('frozen');
+
+      document.getElementById('magnifierModal').style.display = 'flex';
+      setMagnifierZoom(3);
+
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         try {
           activeStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
             audio: false
           });
-          const videoEl = document.getElementById('liveVideo');
+          const videoEl = document.getElementById('magVideo');
           videoEl.srcObject = activeStream;
         } catch (err) {
-          // 若 WebView getUserMedia 未授權，使用者可點擊「開啟手機系統相機拍價標」按鈕呼叫原生相機 Intent
+          toast('請允許相機權限以使用價標放大鏡');
         }
       }
     }
 
-    function closeCameraModal() {
-      document.getElementById('cameraModal').style.display = 'none';
+    function setMagnifierZoom(scale) {
+      currentZoomScale = scale;
+      [1, 2, 3, 5].forEach(s => {
+        const btn = document.getElementById('zBtn' + s);
+        if (btn) btn.className = 'zoom-btn' + (s === scale ? ' active' : '');
+      });
+      const videoEl = document.getElementById('magVideo');
+      const canvasEl = document.getElementById('magFrozenCanvas');
+      const filterStr = isHighContrast ? 'contrast(1.45) brightness(1.08) saturate(1.2)' : 'none';
+      videoEl.style.transform = `scale(${scale})`;
+      videoEl.style.filter = filterStr;
+      canvasEl.style.transform = `scale(${scale})`;
+      canvasEl.style.filter = filterStr;
+
+      document.getElementById('magModalTitle').textContent = `🔍 價標放大鏡 (${scale}x)`;
+      document.getElementById('magBadgeText').textContent =
+        isMagnifierFrozen ? `❄️ 畫面已定格 (${scale}x 放大)` : `🔍 目前放大 ${scale}x`;
+
+      // 若硬體鏡頭支援原生光學/硬體 Zoom，同步設定硬體倍率
+      if (activeStream) {
+        try {
+          const track = activeStream.getVideoTracks()[0];
+          const caps = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps && caps.zoom) {
+            const targetHwZoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, scale));
+            track.applyConstraints({ advanced: [{ zoom: targetHwZoom }] });
+          }
+        } catch (e) {}
+      }
+    }
+
+    function toggleFreezeMagnifier() {
+      const videoEl = document.getElementById('magVideo');
+      const canvasEl = document.getElementById('magFrozenCanvas');
+      const btn = document.getElementById('btnFreezeFrame');
+
+      if (isMagnifierFrozen) {
+        isMagnifierFrozen = false;
+        canvasEl.style.display = 'none';
+        videoEl.style.display = 'block';
+        btn.textContent = '❄️ 定格畫面 (拿近慢慢看)';
+        btn.classList.remove('frozen');
+        document.getElementById('magBadgeText').textContent = `🔍 目前放大 ${currentZoomScale}x`;
+        return;
+      }
+
+      if (videoEl && videoEl.videoWidth > 0) {
+        canvasEl.width = videoEl.videoWidth;
+        canvasEl.height = videoEl.videoHeight;
+        const ctx = canvasEl.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+        isMagnifierFrozen = true;
+        videoEl.style.display = 'none';
+        canvasEl.style.display = 'block';
+        btn.textContent = '▶️ 恢復即時放大鏡';
+        btn.classList.add('frozen');
+        document.getElementById('magBadgeText').textContent = `❄️ 畫面已定格 (${currentZoomScale}x 放大)`;
+      } else {
+        toast('鏡頭畫面準備中，請稍候再按定格');
+      }
+    }
+
+    function toggleHighContrast() {
+      isHighContrast = !isHighContrast;
+      const btn = document.getElementById('btnHighContrast');
+      btn.className = 'btn-contrast' + (isHighContrast ? ' active' : '');
+      setMagnifierZoom(currentZoomScale);
+    }
+
+    function syncFromMagnifier() {
+      const pVal = document.getElementById('magPriceInput').value;
+      const qVal = document.getElementById('magQtyInput').value;
+      items = items.map(x => {
+        if (x.id !== currentMagnifierCardId) return x;
+        return {
+          ...x,
+          price: pVal !== undefined ? String(pVal) : x.price,
+          qty: qVal !== undefined ? String(qVal) : x.qty
+        };
+      });
+      render();
+    }
+
+    function closeMagnifier() {
+      document.getElementById('magnifierModal').style.display = 'none';
       if (activeStream) {
         activeStream.getTracks().forEach(t => t.stop());
         activeStream = null;
       }
-    }
-
-    // 呼叫 Android 原生 MediaStore.ACTION_IMAGE_CAPTURE 相機 Intent
-    function triggerNativeAndroidCamera() {
-      if (window.AndroidBridge && window.AndroidBridge.launchNativeCamera) {
-        window.AndroidBridge.launchNativeCamera();
-      } else {
-        document.getElementById('htmlFileCameraInput').click();
-      }
-    }
-
-    // 接收來自 Android 原生相機拍攝後的真實價標照片 Base64 DataURL
-    window.onNativeCameraPhotoCaptured = function(dataUrl) {
-      latestCapturedPhotoDataUrl = dataUrl;
-      const imgEl = document.getElementById('capturedPreviewImg');
-      imgEl.src = dataUrl;
-      imgEl.style.display = 'block';
-      document.getElementById('liveVideo').style.display = 'none';
-      items = items.map(x => x.id === currentCameraCardId ? { ...x, photo: dataUrl } : x);
-      toast('📸 已拍下真實價標照片並縮圖存檔！可輸入價標文字或直接回主畫面輸入數字');
-      render();
-    };
-
-    function handleHtmlFileCapture(ev) {
-      const file = ev.target.files && ev.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        window.onNativeCameraPhotoCaptured(e.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function snapFromLiveVideo() {
-      const videoEl = document.getElementById('liveVideo');
-      if (!videoEl || !videoEl.videoWidth) {
-        triggerNativeAndroidCamera();
-        return;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = 480;
-      canvas.height = Math.round((videoEl.videoHeight / videoEl.videoWidth) * 480) || 320;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-      window.onNativeCameraPhotoCaptured(dataUrl);
-    }
-
-    // 價標文字解析器：自動從價標文字拆解商品名稱、價格、複合容量(110抽x24包)與促銷折數
-    function parseShelfTagText(rawText) {
-      const cleaned = rawText.replace(/\n+/g, ' ').trim();
-      const priceMatch =
-        cleaned.match(/(?:特價|售價|促銷價|NT\$|\$)\s*(\d{2,5}(?:\.\d{1,2})?)/i) ||
-        cleaned.match(/(\d{2,5})\s*元/) ||
-        cleaned.match(/\b(\d{2,4})\b/);
-      const price = priceMatch ? priceMatch[1] : '';
-
-      let qty = '';
-      let unit = 'g';
-      const multiMatch = cleaned.match(/(\d+)\s*(抽|入|g|ml|公克|毫升)\s*[xX*×]\s*(\d+)/i);
-      if (multiMatch) {
-        qty = String(parseFloat(multiMatch[1]) * parseFloat(multiMatch[3]));
-        const u = multiMatch[2].toLowerCase();
-        unit = (u === 'g' || u === '公克') ? 'g' : (u === 'ml' || u === '毫升') ? 'ml' : multiMatch[2];
-      } else {
-        const singleMatch = cleaned.match(/(\d+(?:\.\d+)?)\s*(ml|g|公克|毫升|抽|入|包)/i);
-        if (singleMatch) {
-          qty = singleMatch[1];
-          const u = singleMatch[2].toLowerCase();
-          unit = (u === 'g' || u === '公克') ? 'g' : (u === 'ml' || u === '毫升') ? 'ml' : singleMatch[2];
-        }
-      }
-
-      let promo = 'NONE';
-      if (/買一送一|買1送1/i.test(cleaned)) promo = 'BOGO';
-      else if (/第二件5折|第2件5折/i.test(cleaned)) promo = 'SECOND_HALF';
-      else if (/85折/i.test(cleaned)) promo = 'DISCOUNT_85';
-      else if (/8折/i.test(cleaned)) promo = 'DISCOUNT_80';
-
-      const namePart = cleaned
-        .replace(/(?:特價|售價|促銷價|NT\$|\$)\s*\d+(?:\.\d+)?/gi, '')
-        .replace(/買一送一|買1送1|第二件5折|85折|8折/gi, '')
-        .trim();
-
-      return {
-        title: namePart || '拍標辨識商品',
-        price,
-        qty,
-        unit,
-        promo
-      };
-    }
-
-    function applyParsedOcrText() {
-      const raw = document.getElementById('ocrRawTextInput').value.trim();
-      if (!raw) {
-        closeCameraModal();
-        return;
-      }
-      const parsed = parseShelfTagText(raw);
-      items = items.map(x => {
-        if (x.id !== currentCameraCardId) return x;
-        return {
-          ...x,
-          title: parsed.title || x.title,
-          price: parsed.price || x.price,
-          qty: parsed.qty || x.qty,
-          unit: UNITS.includes(parsed.unit) ? parsed.unit : x.unit,
-          promo: parsed.promo || x.promo,
-          photo: latestCapturedPhotoDataUrl || x.photo
-        };
-      });
-      document.getElementById('ocrRawTextInput').value = '';
-      closeCameraModal();
-      toast('✅ 已解析價標並自動填入商品卡！');
-      render();
     }
 
     function fmt(v) {
@@ -601,7 +613,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         const m = (PROMOS.find(x => x.id === it.promo) || PROMOS[0]).m;
         const eff = p * m;
         const up = eff / q;
-        const hist = history.find(h => (it.barcode && h.barcode === it.barcode) || (it.title.length > 3 && h.name.includes(it.title.slice(0, 4)) && h.unit === it.unit));
+        const hist = history.find(h => it.title.length > 2 && h.name.includes(it.title.slice(0, 4)) && h.unit === it.unit);
         let alert = null;
         if (hist) {
           const diff = Math.round(eff - hist.unitPrice * q);
@@ -646,15 +658,9 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
             <div class="card-header">
               <span class="badge-num">#${idx + 1}</span>
               <input class="title-input" value="${it.title}" onchange="setTitle('${it.id}', this.value)" />
-              <button class="btn-ocr" onclick="openCameraFor('${it.id}')">📷 拍價標</button>
+              <button class="btn-magnifier" onclick="openMagnifierFor('${it.id}')">🔍 放大鏡</button>
               ${items.length > 2 ? `<button class="btn-del" onclick="delCard('${it.id}')">✕</button>` : ''}
             </div>
-            ${it.photo ? `
-              <div class="captured-tag-row">
-                <img class="captured-thumb" src="${it.photo}" />
-                <div class="captured-meta">📸 已拍攝真實賣場價標照片（存檔時將自動寫入本機底價筆記本）</div>
-              </div>
-            ` : ''}
             ${r.alert ? `<div class="alert-box ${r.alert.cls}">${r.alert.txt}</div>` : ''}
             <div class="inputs-grid">
               <div class="input-box ${fp ? 'focused' : ''}" onclick="focusBox('${it.id}','price')">
@@ -693,7 +699,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     function setPromo(id, p) { items = items.map(x => x.id === id ? { ...x, promo: p } : x); render(); }
     function addProduct() {
       const nid = 'c' + Date.now();
-      items.push({ id: nid, title: '商品 ' + (items.length + 1), price: '', qty: '', unit: items[0].unit, promo: 'NONE', photo: null });
+      items.push({ id: nid, title: '商品 ' + (items.length + 1), price: '', qty: '', unit: items[0].unit, promo: 'NONE' });
       target = { id: nid, field: 'price' };
       render();
     }
@@ -705,8 +711,8 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     }
     function resetCards() {
       items = [
-        { id: 'c1', title: '商品 1', price: '', qty: '', unit: 'g', promo: 'NONE', photo: null },
-        { id: 'c2', title: '商品 2', price: '', qty: '', unit: 'g', promo: 'NONE', photo: null }
+        { id: 'c1', title: '商品 1', price: '', qty: '', unit: 'g', promo: 'NONE' },
+        { id: 'c2', title: '商品 2', price: '', qty: '', unit: 'g', promo: 'NONE' }
       ];
       target = { id: 'c1', field: 'price' };
       render();
@@ -758,13 +764,11 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         qty: parseFloat(it.qty),
         unit: it.unit,
         unitPrice: r.up,
-        date: today,
-        barcode: it.barcode,
-        photo: it.photo || null
+        date: today
       };
       history.unshift(rec);
       persistHistory();
-      toast('💾 已儲存至本機 SQLite 底價筆記本：' + rec.name + ' (' + store + ')');
+      toast('💾 已儲存至本機底價筆記本：' + rec.name + ' (' + store + ')');
       render();
     }
     function setStore(v) { store = v; }
@@ -775,27 +779,120 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       document.getElementById('tabBtn2').className = 'nav-item ' + (n === 2 ? 'active' : '');
       if (n === 2) renderHistory();
     }
+
+    // 刪除單筆底價紀錄
+    function deleteSingleHistory(id) {
+      history = history.filter(h => h.id !== id);
+      persistHistory();
+      render();
+      renderHistory();
+      toast('🗑️ 已刪除該筆底價紀錄');
+    }
+
+    // 一鍵清除全部底價紀錄
+    function clearAllHistoryRecords() {
+      if (history.length === 0) return;
+      if (!confirm('確定要一鍵清除全部 ' + history.length + ' 筆底價紀錄嗎？')) return;
+      history = [];
+      persistHistory();
+      render();
+      renderHistory();
+      toast('🗑️ 已一鍵清除所有底價紀錄');
+    }
+
     function renderHistory() {
       const q = (document.getElementById('searchBox').value || '').toLowerCase();
       const stores = ['ALL', '全聯福利中心', '好市多 Costco', '家樂福 Carrefour', '大潤發 RT-Mart'];
-      document.getElementById('storeFilters').innerHTML = stores.map(s => `<button class="pill ${filterStore === s ? 'active-promo' : ''}" onclick="filterStore='${s}';renderHistory()">${s === 'ALL' ? '全部賣場' : s.split(' ')[0]}</button>`).join('');
+      document.getElementById('storeFilters').innerHTML = stores.map(s => `<button class="pill ${filterStore === s ? 'active-promo' : ''}" onclick="filterStore='${s}';renderHistory()">${s === 'ALL' ? '全部賣場 (' + history.length + ')' : s.split(' ')[0]}</button>`).join('');
+      document.getElementById('btnClearAllHistory').disabled = history.length === 0;
+
       const list = history.filter(h => (filterStore === 'ALL' || h.store === filterStore) && (!q || h.name.toLowerCase().includes(q) || h.store.toLowerCase().includes(q)));
-      document.getElementById('historyList').innerHTML = list.map(h => `
-        <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          ${h.photo ? `<img src="${h.photo}" style="width:54px;height:54px;object-fit:cover;border-radius:10px;border:1.5px solid #2E7D32;flex-shrink:0;" />` : `<div style="width:54px;height:54px;border-radius:10px;background:#F3F4F6;border:1px solid #D1D5DB;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🏷️</div>`}
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:900;color:#2E7D32;">📍 ${h.store} · ${h.date} ${h.lat ? `(${h.lat.toFixed(3)},${h.lon.toFixed(3)})` : ''}</div>
-            <div style="font-size:16px;font-weight:900;margin:2px 0;">${h.name}</div>
-            <div style="font-size:14px;font-weight:800;color:#374151;">實付 $${h.price} / ${h.qty} ${h.unit} (單價 $${fmt(h.unitPrice)}/${h.unit})</div>
+      const container = document.getElementById('historyList');
+      if (list.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:36px 16px;color:#6B7280;font-weight:800;font-size:16px;">目前沒有任何底價紀錄</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(h => `
+        <div class="swipe-wrapper" data-id="${h.id}">
+          <div class="swipe-delete-bg" onclick="deleteSingleHistory('${h.id}')">
+            <span style="font-size:20px;">🗑️</span>
+            <span>刪除</span>
           </div>
-          <button class="btn-cam" style="flex:0;white-space:nowrap;" onclick="loadFromHistory('${h.id}')">⚡ 帶入比價</button>
+          <div class="swipe-card-fg" id="fg-${h.id}">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:900;color:#2E7D32;">📍 ${h.store} · ${h.date}</div>
+              <div style="font-size:17px;font-weight:900;margin:3px 0;color:#111111;">${h.name}</div>
+              <div style="font-size:14px;font-weight:800;color:#374151;">實付 $${h.price} / ${h.qty} ${h.unit}</div>
+              <div style="display:inline-block;background:#E8F5E9;color:#2E7D32;font-size:14px;font-weight:900;padding:2px 8px;border-radius:6px;margin-top:4px;">
+                歷史底價：$${fmt(h.unitPrice)} / ${h.unit}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+              <button class="btn-cam" style="padding:8px 12px;font-size:13px;" onclick="loadFromHistory('${h.id}')">⚡ 帶入比價</button>
+              <span style="font-size:11px;font-weight:800;color:#9CA3AF;">⬅ 左滑刪除</span>
+            </div>
+          </div>
         </div>
       `).join('');
+
+      attachSwipeHandlers();
     }
+
+    // 綁定手勢左滑刪除 (Touch & Mouse Drag Swipe-Left to Delete)
+    function attachSwipeHandlers() {
+      const wrappers = document.querySelectorAll('.swipe-wrapper');
+      wrappers.forEach(wrap => {
+        const id = wrap.getAttribute('data-id');
+        const fg = document.getElementById('fg-' + id);
+        if (!fg) return;
+
+        let startX = 0;
+        let startY = 0;
+        let currentDx = 0;
+        let dragging = false;
+
+        fg.addEventListener('touchstart', e => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          currentDx = 0;
+          dragging = true;
+          fg.style.transition = 'none';
+        }, { passive: true });
+
+        fg.addEventListener('touchmove', e => {
+          if (!dragging) return;
+          const dx = e.touches[0].clientX - startX;
+          const dy = e.touches[0].clientY - startY;
+          if (Math.abs(dy) > Math.abs(dx)) return;
+          if (dx < 0) {
+            currentDx = Math.max(dx, -140);
+            fg.style.transform = `translateX(${currentDx}px)`;
+          } else {
+            currentDx = 0;
+            fg.style.transform = 'translateX(0px)';
+          }
+        }, { passive: true });
+
+        fg.addEventListener('touchend', () => {
+          if (!dragging) return;
+          dragging = false;
+          fg.style.transition = 'transform 0.18s ease-out';
+          if (currentDx < -125) {
+            deleteSingleHistory(id);
+          } else if (currentDx < -40) {
+            fg.style.transform = 'translateX(-96px)';
+          } else {
+            fg.style.transform = 'translateX(0px)';
+          }
+        });
+      });
+    }
+
     function loadFromHistory(hid) {
       const h = history.find(x => x.id === hid);
       if (!h) return;
-      items.push({ id: 'c' + Date.now(), title: h.name + ' (歷史價)', price: String(h.price), qty: String(h.qty), unit: h.unit, promo: 'NONE', barcode: h.barcode, photo: h.photo });
+      items.push({ id: 'c' + Date.now(), title: h.name + ' (歷史價)', price: String(h.price), qty: String(h.qty), unit: h.unit, promo: 'NONE' });
       switchTab(1);
       render();
     }
@@ -803,36 +900,31 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       const el = document.getElementById('toast');
       el.textContent = msg;
       el.style.display = 'block';
-      setTimeout(() => el.style.display = 'none', 3200);
+      setTimeout(() => el.style.display = 'none', 2800);
     }
 
     render();
-    // 啟動後自動請求一次真實 GPS 定位
     setTimeout(() => { requestRealGps(); }, 600);
   </script>
 </body>
 </html>
 EOF
 
-# 4. 建立原生 Android MainActivity.java：實作真實 GPS LocationManager、真實相機 Intent (ACTION_IMAGE_CAPTURE)、WebChromeClient 相機與定位權限授權、以及原生 SQLite 儲存 Bridge
+# 4. 建立原生 Android MainActivity.java：實作真實 GPS LocationManager、WebChromeClient 相機放大鏡鏡頭權限授權與原生 SQLite 儲存 Bridge
 cat << 'EOF' > "${WORK_DIR}/src/com/smartgrocery/unitpricecomparator/MainActivity.java"
 package com.smartgrocery.unitpricecomparator;
 
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.graphics.Bitmap;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
-import android.util.Base64;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -841,11 +933,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import java.io.ByteArrayOutputStream;
-
 public class MainActivity extends Activity {
     private static final int REQ_PERMISSIONS = 1001;
-    private static final int REQ_CAMERA_CAPTURE = 1002;
     private static final int REQ_GPS_PERMISSION = 1003;
 
     private WebView webView;
@@ -856,9 +945,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 初始化原生 SQLite 資料庫 (smart_grocery_comparator.db)
         initNativeSqlite();
-
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         webView = new WebView(this);
@@ -873,7 +960,7 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new AndroidHardwareBridge(), "AndroidBridge");
         webView.setWebViewClient(new WebViewClient());
 
-        // 允許 WebView 使用真實手機相機 (getUserMedia) 與真實 GPS (Geolocation)
+        // 允許 WebView 使用真實手機相機作為高倍率放大鏡 (getUserMedia) 與真實 GPS
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -929,16 +1016,6 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     startRealNativeGpsLookup();
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void launchNativeCamera() {
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    startNativeCameraIntent();
                 }
             });
         }
@@ -1005,14 +1082,14 @@ public class MainActivity extends Activity {
             }
 
             if (bestLast != null) {
-                sendGpsCoordsToJs(bestLast.getLatitude(), bestLast.getLongitude(), bestLast.getProvider());
+                sendGpsCoordsToJs(bestLast.getLatitude(), bestLast.getLongitude());
             }
 
             final LocationListener onceListener = new LocationListener() {
                 @Override
                 public void onLocationChanged(Location loc) {
                     if (loc != null) {
-                        sendGpsCoordsToJs(loc.getLatitude(), loc.getLongitude(), loc.getProvider());
+                        sendGpsCoordsToJs(loc.getLatitude(), loc.getLongitude());
                         try {
                             locationManager.removeUpdates(this);
                         } catch (SecurityException ignored) {
@@ -1041,7 +1118,7 @@ public class MainActivity extends Activity {
             }
 
             if (!requested && bestLast == null) {
-                sendGpsErrorToJs("請在手機下拉選單開啟「位置 / GPS」功能");
+                sendGpsErrorToJs("請在手機開啟「位置 / GPS」功能");
             }
         } catch (SecurityException se) {
             sendGpsErrorToJs("未授予 GPS 定位權限");
@@ -1050,12 +1127,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void sendGpsCoordsToJs(final double lat, final double lon, final String provider) {
+    private void sendGpsCoordsToJs(final double lat, final double lon) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 if (webView != null) {
-                    String js = "window.onRealGpsLocationReceived(" + lat + ", " + lon + ", '" + provider + "');";
+                    String js = "window.onRealGpsLocationReceived(" + lat + ", " + lon + ");";
                     webView.evaluateJavascript(js, null);
                 }
             }
@@ -1072,50 +1149,6 @@ public class MainActivity extends Activity {
                 }
             }
         });
-    }
-
-    private void startNativeCameraIntent() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_CAPTURE);
-                    return;
-                }
-            }
-            Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            startActivityForResult(takePictureIntent, REQ_CAMERA_CAPTURE);
-        } catch (Exception e) {
-            sendGpsErrorToJs("無法啟動手機相機：" + e.getMessage());
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_CAMERA_CAPTURE && resultCode == Activity.RESULT_OK && data != null) {
-            Bundle extras = data.getExtras();
-            if (extras != null) {
-                Object rawBitmap = extras.get("data");
-                if (rawBitmap instanceof Bitmap) {
-                    Bitmap bmp = (Bitmap) rawBitmap;
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    bmp.compress(Bitmap.CompressFormat.JPEG, 82, baos);
-                    String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-                    final String dataUrl = "data:image/jpeg;base64," + base64;
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (webView != null) {
-                                webView.evaluateJavascript(
-                                    "window.onNativeCameraPhotoCaptured('" + dataUrl + "');",
-                                    null
-                                );
-                            }
-                        }
-                    });
-                }
-            }
-        }
     }
 
     @Override
@@ -1162,7 +1195,6 @@ echo "==> [4/6] Converting JVM bytecode to Dalvik DEX with d8..."
   --output "${WORK_DIR}/dex" \
   "${WORK_DIR}/classes/com/smartgrocery/unitpricecomparator/"*.class
 
-# 將 classes.dex 封裝進 APK 根目錄
 (cd "${WORK_DIR}/dex" && zip -q "${WORK_DIR}/unaligned.apk" classes.dex)
 
 echo "==> [5/6] Aligning APK with zipalign..."

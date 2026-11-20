@@ -63,7 +63,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
           onPress={onQuickCameraSimulate}
           activeOpacity={0.85}
         >
-          <Text style={styles.quickOcrBtnText}>📷 相機拍價標</Text>
+          <Text style={styles.quickOcrBtnText}>🔍 放大鏡看標價</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -1,18 +1,17 @@
 /**
- * 賣場極簡比價王 - 真實手機相機取景器與離線價標 OCR / 條碼掃描模組
+ * 賣場極簡比價王 - 長輩友善「相機高倍率放大鏡」元件 (CameraMagnifierModal)
  *
- * 功能：
- * 1. 使用 `expo-camera` 的 `CameraView` 啟動手機真實後置鏡頭取景器。
- * 2. 「拍價標辨識 (OCR)」模式：對準賣場貨架價格牌按下快門，呼叫 `takePictureAsync` 拍下真實照片，
- *    並交由本機離線 Google ML Kit (`CameraOcrService.recognizePriceTagFromPhotoUri`) 自動擷取
- *    「商品名稱」、「售價」、「容量/數量」與「促銷折扣」，同時保留照片縮圖供底價筆記本存檔。
- * 3. 「條碼掃描 (BARCODE)」模式：自動透過原生鏡頭掃描 EAN-13 / EAN-8 / UPC 商品條碼並比對本機歷史底價。
- * 4. 若使用者未對準真實價標，亦可在畫面下方直接輸入/修改辨識出的文字立即解析帶入。
+ * 設計理念：
+ * - 取消複雜的拍價標與 OCR 辨識，改用手機真實相機實現「大字高倍率放大鏡」，讓長輩在賣場貨架前輕鬆看清楚微小的「標價」與「容量（g/ml/抽）」。
+ * - 支援：
+ *   1. 一鍵倍率切換：1x、2x、3x、5x 超大字按鈕。
+ *   2. ❄️ 凍結畫面（定格）：手抖或高處價標時，按一下定格畫面，即可拿近慢慢看清楚並直接在本視窗輸入該商品的「價格」與「容量」。
+ *   3. 🔦 手電筒補光：賣場貨架下層光線昏暗時可一鍵開燈。
  */
 
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Image,
   Modal,
   StyleSheet,
   Text,
@@ -20,134 +19,66 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {
-  BarcodeScanningResult,
-  CameraView,
-  useCameraPermissions,
-} from 'expo-camera';
-import {
-  CameraOcrService,
-  OcrTagRecognitionResult,
-  parseShelfTagOcrText,
-} from '../services/hardwareService';
-import { PriceHistoryRecord } from '../types/grocery';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { UNIT_OPTIONS, UnitType } from '../types/grocery';
 
-interface CameraScannerModalProps {
+interface CameraMagnifierModalProps {
   visible: boolean;
-  mode: 'OCR' | 'BARCODE';
   targetCardTitle: string;
-  historyRecords: PriceHistoryRecord[];
+  currentPrice: string;
+  currentQuantity: string;
+  currentUnit: UnitType;
+  onUpdatePrice: (price: string) => void;
+  onUpdateQuantity: (qty: string) => void;
+  onUpdateUnit: (unit: UnitType) => void;
   onClose: () => void;
-  onApplyRecognition: (result: OcrTagRecognitionResult) => void;
 }
 
-export const CameraSimulatorModal: React.FC<CameraScannerModalProps> = ({
+const ZOOM_LEVELS = [
+  { label: '1x 原倍', zoomValue: 0.0, scaleText: '1x' },
+  { label: '2x 放大', zoomValue: 0.25, scaleText: '2x' },
+  { label: '3x 特大', zoomValue: 0.55, scaleText: '3x' },
+  { label: '5x 超大', zoomValue: 0.85, scaleText: '5x' },
+];
+
+export const CameraSimulatorModal: React.FC<CameraMagnifierModalProps> = ({
   visible,
-  mode,
   targetCardTitle,
-  historyRecords,
+  currentPrice,
+  currentQuantity,
+  currentUnit,
+  onUpdatePrice,
+  onUpdateQuantity,
+  onUpdateUnit,
   onClose,
-  onApplyRecognition,
 }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string>(
-    mode === 'OCR'
-      ? '請將賣場貨架「價格牌」對準綠色取景框，按下快門拍照辨識'
-      : '請將商品「條碼 (EAN/UPC)」對準取景框即可自動掃描'
-  );
-  const [manualOcrInput, setManualOcrInput] = useState('');
+  const [zoomIndex, setZoomIndex] = useState<number>(2); // 預設 3x 特大放大
+  const [torchOn, setTorchOn] = useState<boolean>(false);
+  const [frozenPhotoUri, setFrozenPhotoUri] = useState<string | null>(null);
 
-  /** 按下真實快門拍攝價標並執行本機離線 ML Kit OCR */
-  const handleCapturePriceTag = async () => {
-    if (!cameraRef.current || isProcessing) return;
-    setIsProcessing(true);
-    setStatusMessage('📸 正在拍攝價標並執行本機離線 OCR 文字辨識...');
-
+  /** 凍結 / 解凍畫面（方便長輩拍下價標定格拿近看，不怕手抖） */
+  const handleToggleFreeze = async () => {
+    if (frozenPhotoUri) {
+      setFrozenPhotoUri(null);
+      return;
+    }
+    if (!cameraRef.current) return;
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
-        skipProcessing: false,
+        quality: 0.85,
+        skipProcessing: true,
       });
-
-      if (!photo?.uri) {
-        setStatusMessage('⚠️ 拍照失敗，請重試');
-        setIsProcessing(false);
-        return;
+      if (photo?.uri) {
+        setFrozenPhotoUri(photo.uri);
       }
-
-      const result = await CameraOcrService.recognizePriceTagFromPhotoUri(
-        photo.uri
-      );
-      setIsProcessing(false);
-      onApplyRecognition(result);
-    } catch (err: any) {
-      setIsProcessing(false);
-      setStatusMessage(
-        `OCR 辨識提示：${err?.message || '請確認價標字跡清晰或使用下方文字解析'}`
-      );
+    } catch {
+      // ignore if capture fails
     }
   };
 
-  /** 真實鏡頭掃描到 EAN/UPC 商品條碼時的回呼 */
-  const handleBarcodeScanned = (scanResult: BarcodeScanningResult) => {
-    if (mode !== 'BARCODE' || isProcessing) return;
-    const scannedCode = scanResult.data?.trim();
-    if (!scannedCode) return;
-
-    setIsProcessing(true);
-    // 查詢本機 SQLite 底價筆記本是否已有該條碼的歷史紀錄
-    const matchedHistory = historyRecords.find(
-      (r) => r.barcode === scannedCode
-    );
-
-    if (matchedHistory) {
-      onApplyRecognition({
-        productName: matchedHistory.productName,
-        price: matchedHistory.effectivePrice,
-        quantity: matchedHistory.quantity,
-        packCount: 1,
-        unit: matchedHistory.unit,
-        detectedPromo: matchedHistory.promoType,
-        barcode: scannedCode,
-        photoUri: matchedHistory.photoUri || '',
-        rawOcrText: `條碼掃描命中本機歷史紀錄：${scannedCode}`,
-        confidence: 1.0,
-      });
-    } else {
-      onApplyRecognition({
-        productName: `條碼商品 (${scannedCode})`,
-        price: 0,
-        quantity: 1,
-        packCount: 1,
-        unit: 'g',
-        detectedPromo: 'NONE',
-        barcode: scannedCode,
-        photoUri: '',
-        rawOcrText: `已掃描新商品條碼：${scannedCode}`,
-        confidence: 1.0,
-      });
-    }
-    setIsProcessing(false);
-  };
-
-  /** 解析使用者手動貼上或修正的價標文字 */
-  const handleParseCustomOcrText = () => {
-    if (!manualOcrInput.trim()) return;
-    const parsed = parseShelfTagOcrText(manualOcrInput);
-    onApplyRecognition({
-      productName: parsed.productName,
-      price: parsed.price ?? 0,
-      quantity: parsed.quantity ?? 1,
-      packCount: 1,
-      unit: parsed.unit,
-      detectedPromo: parsed.detectedPromo,
-      photoUri: '',
-      rawOcrText: parsed.rawOcrText,
-      confidence: 0.95,
-    });
-  };
+  const activeZoom = ZOOM_LEVELS[zoomIndex] || ZOOM_LEVELS[1];
 
   return (
     <Modal
@@ -158,96 +89,186 @@ export const CameraSimulatorModal: React.FC<CameraScannerModalProps> = ({
     >
       <View style={styles.overlay}>
         <View style={styles.sheet}>
+          {/* 頂部大字標題列 */}
           <View style={styles.topBar}>
-            <Text style={styles.titleText}>
-              {mode === 'OCR'
-                ? `📷 相機拍價標辨識 (${targetCardTitle})`
-                : `🏷️ 真實條碼掃描 (${targetCardTitle})`}
-            </Text>
+            <View>
+              <Text style={styles.titleText}>
+                🔍 價標放大鏡 ({activeZoom.scaleText})
+              </Text>
+              <Text style={styles.subtitleText}>
+                對準貨架價標看清楚「價格」與「容量」，正在填寫：{targetCardTitle}
+              </Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
-              <Text style={styles.closeIconText}>✕</Text>
+              <Text style={styles.closeIconText}>✕ 關閉</Text>
             </TouchableOpacity>
           </View>
 
-          {/* 檢查並請求真實相機權限 */}
+          {/* 相機放大鏡取景窗 */}
           {!permission?.granted ? (
             <View style={styles.permissionBox}>
               <Text style={styles.permissionTitle}>
-                需要開啟手機相機權限以拍攝賣場價格牌與條碼
+                請開啟相機權限以使用「大字價標放大鏡」
               </Text>
               <TouchableOpacity
                 style={styles.grantBtn}
                 onPress={requestPermission}
               >
-                <Text style={styles.grantBtnText}>🔓 允許開啟手機相機</Text>
+                <Text style={styles.grantBtnText}>🔓 允許開啟相機放大鏡</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.cameraContainer}>
-              <CameraView
-                ref={cameraRef}
-                style={styles.cameraPreview}
-                facing="back"
-                barcodeScannerSettings={
-                  mode === 'BARCODE'
-                    ? {
-                        barcodeTypes: [
-                          'ean13',
-                          'ean8',
-                          'upc_a',
-                          'upc_e',
-                          'code128',
-                          'qr',
-                        ],
-                      }
-                    : undefined
-                }
-                onBarcodeScanned={
-                  mode === 'BARCODE' ? handleBarcodeScanned : undefined
-                }
-              >
-                <View style={styles.reticleBox}>
-                  <View style={styles.cornerTL} />
-                  <View style={styles.cornerTR} />
-                  <View style={styles.cornerBL} />
-                  <View style={styles.cornerBR} />
-                </View>
-              </CameraView>
+            <View style={styles.magnifierContainer}>
+              <View style={styles.viewportBox}>
+                {frozenPhotoUri ? (
+                  <Image
+                    source={{ uri: frozenPhotoUri }}
+                    style={styles.cameraPreview}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <CameraView
+                    ref={cameraRef}
+                    style={styles.cameraPreview}
+                    facing="back"
+                    zoom={activeZoom.zoomValue}
+                    enableTorch={torchOn}
+                  />
+                )}
 
-              {mode === 'OCR' && (
+                {/* 放大鏡準星輔助線 */}
+                <View style={styles.magnifierGuideFrame} pointerEvents="none">
+                  <Text style={styles.magnifierBadge}>
+                    {frozenPhotoUri
+                      ? '❄️ 畫面已定格（不怕手抖）'
+                      : `🔍 目前放大 ${activeZoom.scaleText}`}
+                  </Text>
+                </View>
+              </View>
+
+              {/* 放大倍率大按鈕列 (1x / 2x / 3x / 5x) */}
+              <View style={styles.zoomButtonsRow}>
+                {ZOOM_LEVELS.map((z, idx) => {
+                  const active = zoomIndex === idx;
+                  return (
+                    <TouchableOpacity
+                      key={z.label}
+                      style={[
+                        styles.zoomBtn,
+                        active && styles.zoomBtnActive,
+                      ]}
+                      onPress={() => {
+                        setZoomIndex(idx);
+                        setFrozenPhotoUri(null);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.zoomBtnText,
+                          active && styles.zoomBtnTextActive,
+                        ]}
+                      >
+                        {z.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* 定格畫面 & 手電筒補光大按鈕 */}
+              <View style={styles.utilityControlsRow}>
                 <TouchableOpacity
-                  style={styles.shutterBtn}
-                  onPress={handleCapturePriceTag}
-                  disabled={isProcessing}
+                  style={[
+                    styles.freezeBtn,
+                    frozenPhotoUri && styles.freezeBtnActive,
+                  ]}
+                  onPress={handleToggleFreeze}
                 >
-                  {isProcessing ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.shutterBtnText}>
-                      📸 按下快門拍價標並自動填入
-                    </Text>
-                  )}
+                  <Text style={styles.freezeBtnText}>
+                    {frozenPhotoUri
+                      ? '▶️ 恢復即時放大鏡'
+                      : '❄️ 定格畫面 (拿近慢慢看)'}
+                  </Text>
                 </TouchableOpacity>
-              )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.torchBtn,
+                    torchOn && styles.torchBtnActive,
+                  ]}
+                  onPress={() => setTorchOn((v) => !v)}
+                >
+                  <Text
+                    style={[
+                      styles.torchBtnText,
+                      torchOn && styles.torchBtnTextActive,
+                    ]}
+                  >
+                    {torchOn ? '🔦 關燈' : '🔦 補光燈'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
-          <Text style={styles.statusHint}>{statusMessage}</Text>
+          {/* 邊看放大鏡邊輸入：直接填入「總價格」與「總容量」 */}
+          <View style={styles.quickEntryPanel}>
+            <Text style={styles.quickEntryTitle}>
+              ✍️ 看清楚後可直接在此輸入（自動同步至 {targetCardTitle}）：
+            </Text>
 
-          {/* 輔助價標文字即時解析區 */}
-          <View style={styles.manualParseRow}>
-            <TextInput
-              style={styles.manualInput}
-              value={manualOcrInput}
-              onChangeText={setManualOcrInput}
-              placeholder="亦可直接輸入價標文字 (例：舒潔衛生紙 110抽x24包 $339)"
-              placeholderTextColor="#757575"
-            />
-            <TouchableOpacity
-              style={styles.parseBtn}
-              onPress={handleParseCustomOcrText}
-            >
-              <Text style={styles.parseBtnText}>解析帶入</Text>
+            <View style={styles.quickInputsRow}>
+              <View style={styles.quickInputBox}>
+                <Text style={styles.quickInputLabel}>標價 (元)</Text>
+                <TextInput
+                  style={styles.quickInputField}
+                  keyboardType="numeric"
+                  value={currentPrice}
+                  onChangeText={onUpdatePrice}
+                  placeholder="輸入價格"
+                  placeholderTextColor="#9E9E9E"
+                />
+              </View>
+
+              <View style={styles.quickInputBox}>
+                <Text style={styles.quickInputLabel}>
+                  容量 / 數量 ({currentUnit})
+                </Text>
+                <TextInput
+                  style={styles.quickInputField}
+                  keyboardType="numeric"
+                  value={currentQuantity}
+                  onChangeText={onUpdateQuantity}
+                  placeholder="輸入容量"
+                  placeholderTextColor="#9E9E9E"
+                />
+              </View>
+            </View>
+
+            <View style={styles.quickUnitRow}>
+              {UNIT_OPTIONS.map((u) => (
+                <TouchableOpacity
+                  key={u}
+                  style={[
+                    styles.quickUnitPill,
+                    currentUnit === u && styles.quickUnitPillActive,
+                  ]}
+                  onPress={() => onUpdateUnit(u)}
+                >
+                  <Text
+                    style={[
+                      styles.quickUnitText,
+                      currentUnit === u && styles.quickUnitTextActive,
+                    ]}
+                  >
+                    {u}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.doneBtn} onPress={onClose}>
+              <Text style={styles.doneBtnText}>✅ 看完填好，返回比價</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -259,7 +280,7 @@ export const CameraSimulatorModal: React.FC<CameraScannerModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.78)',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -271,22 +292,32 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 10,
   },
   titleText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '900',
     color: '#111111',
   },
+  subtitleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2E7D32',
+    marginTop: 2,
+  },
   closeIconBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
   },
   closeIconText: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#424242',
+    color: '#111111',
   },
   permissionBox: {
     backgroundColor: '#F3F4F6',
@@ -296,7 +327,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   permissionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#111111',
     textAlign: 'center',
@@ -306,115 +337,179 @@ const styles = StyleSheet.create({
     backgroundColor: '#2E7D32',
     borderRadius: 12,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
   },
   grantBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  cameraContainer: {
-    marginBottom: 10,
-  },
-  cameraPreview: {
-    height: 260,
-    borderRadius: 16,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#000000',
-  },
-  reticleBox: {
-    width: '82%',
-    height: 130,
-    borderWidth: 1,
-    borderColor: 'rgba(74, 222, 128, 0.45)',
-    position: 'relative',
-  },
-  cornerTL: {
-    position: 'absolute',
-    top: -2,
-    left: -2,
-    width: 24,
-    height: 24,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
-    borderColor: '#4ADE80',
-  },
-  cornerTR: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 24,
-    height: 24,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#4ADE80',
-  },
-  cornerBL: {
-    position: 'absolute',
-    bottom: -2,
-    left: -2,
-    width: 24,
-    height: 24,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
-    borderColor: '#4ADE80',
-  },
-  cornerBR: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 24,
-    height: 24,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderColor: '#4ADE80',
-  },
-  shutterBtn: {
-    backgroundColor: '#2E7D32',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  shutterBtnText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '900',
   },
-  statusHint: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#2E7D32',
-    textAlign: 'center',
+  magnifierContainer: {
+    marginBottom: 12,
+  },
+  viewportBox: {
+    height: 250,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 3.5,
+    borderColor: '#2E7D32',
+    backgroundColor: '#000000',
+    position: 'relative',
     marginBottom: 10,
   },
-  manualParseRow: {
+  cameraPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  magnifierGuideFrame: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  magnifierBadge: {
+    color: '#4ADE80',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  zoomButtonsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
+    marginBottom: 8,
   },
-  manualInput: {
+  zoomBtn: {
     flex: 1,
-    borderWidth: 1.5,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
     borderColor: '#BDBDBD',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    fontWeight: '700',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  zoomBtnActive: {
+    backgroundColor: '#2E7D32',
+    borderColor: '#2E7D32',
+  },
+  zoomBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
     color: '#111111',
   },
-  parseBtn: {
-    backgroundColor: '#111111',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-  },
-  parseBtnText: {
+  zoomBtnTextActive: {
     color: '#FFFFFF',
+  },
+  utilityControlsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  freezeBtn: {
+    flex: 1.6,
+    backgroundColor: '#111111',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  freezeBtnActive: {
+    backgroundColor: '#D32F2F',
+  },
+  freezeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  torchBtn: {
+    flex: 1,
+    backgroundColor: '#FFF8E1',
+    borderWidth: 2,
+    borderColor: '#FFB300',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  torchBtnActive: {
+    backgroundColor: '#FFB300',
+  },
+  torchBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111111',
+  },
+  torchBtnTextActive: {
+    color: '#111111',
+  },
+  quickEntryPanel: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    padding: 12,
+  },
+  quickEntryTitle: {
     fontSize: 14,
     fontWeight: '800',
+    color: '#1B5E20',
+    marginBottom: 8,
+  },
+  quickInputsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 8,
+  },
+  quickInputBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#111111',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  quickInputLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#424242',
+  },
+  quickInputField: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#111111',
+    paddingVertical: 2,
+  },
+  quickUnitRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  quickUnitPill: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  quickUnitPillActive: {
+    backgroundColor: '#111111',
+  },
+  quickUnitText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#111111',
+  },
+  quickUnitTextActive: {
+    color: '#FFFFFF',
+  },
+  doneBtn: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  doneBtnText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
   },
 });

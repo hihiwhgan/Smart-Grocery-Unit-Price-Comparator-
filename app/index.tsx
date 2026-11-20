@@ -3,8 +3,8 @@
  *
  * 架構規範：
  * - 全 App 僅包含 2 個主要分頁（Bottom Navigation Bar）：
- *   1. 「比價計算」（預設首頁：多商品動態卡片列表、真實手機 GPS 賣場自動定位、真實相機拍價標 OCR 按鈕、底部固定 45% 單手拇指操作區）
- *   2. 「底價紀錄」（個人底價筆記本：歷史儲存清單、賣場篩選器、關鍵字與條碼搜尋、真實拍攝價標照片縮圖）
+ *   1. 「比價計算」（預設首頁：多商品動態卡片列表、真實手機 GPS 賣場自動定位、長輩友善相機放大鏡按鈕、底部固定 45% 單手拇指操作區）
+ *   2. 「底價紀錄」（個人底價筆記本：支援手勢左滑刪除、一鍵清除全部紀錄、賣場篩選器、關鍵字搜尋）
  * - 100% 離線優先（Offline-First）：連接本機 SQLite 資料庫 (`src/db/schema.ts`)。
  */
 
@@ -27,7 +27,6 @@ import { INITIAL_SEED_RECORDS } from '../src/db/schema';
 import {
   KNOWN_STORE_GEOFENCES,
   LocationStoreService,
-  OcrTagRecognitionResult,
 } from '../src/services/hardwareService';
 import {
   ActiveInputTarget,
@@ -71,7 +70,6 @@ export default function AppMainScreen() {
       packCountInput: '1',
       unit: '抽',
       promo: 'NONE',
-      barcode: '4710036003128',
     },
     {
       id: 'item-2',
@@ -81,7 +79,6 @@ export default function AppMainScreen() {
       packCountInput: '1',
       unit: '抽',
       promo: 'BOGO',
-      barcode: '4710018009216',
     },
   ]);
 
@@ -92,14 +89,12 @@ export default function AppMainScreen() {
   });
   const [isKeypadExpanded, setIsKeypadExpanded] = useState<boolean>(true);
 
-  // 真實相機拍標 OCR / 條碼掃描視窗狀態
-  const [cameraModal, setCameraModal] = useState<{
+  // 長輩友善「相機高倍率放大鏡」視窗狀態
+  const [magnifierModal, setMagnifierModal] = useState<{
     visible: boolean;
-    mode: 'OCR' | 'BARCODE';
     targetItemId: string;
   }>({
     visible: false,
-    mode: 'OCR',
     targetItemId: 'item-1',
   });
 
@@ -149,6 +144,13 @@ export default function AppMainScreen() {
     if (idx === -1) return '商品 1';
     return items[idx].title || `商品 ${idx + 1}`;
   }, [activeInput, items]);
+
+  // 取得放大鏡對應的商品卡片
+  const magnifierTargetItem = useMemo(
+    () =>
+      items.find((i) => i.id === magnifierModal.targetItemId) || items[0],
+    [items, magnifierModal.targetItemId]
+  );
 
   /** 動態新增商品卡片（商品 3、商品 4...） */
   const handleAddProduct = () => {
@@ -265,32 +267,7 @@ export default function AppMainScreen() {
     });
   };
 
-  /** 套用真實相機拍標離線 OCR 辨識或條碼掃描結果 */
-  const handleApplyCameraResult = (ocrResult: OcrTagRecognitionResult) => {
-    const targetId = cameraModal.targetItemId;
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== targetId) return item;
-        return {
-          ...item,
-          title: ocrResult.productName || item.title,
-          priceInput:
-            ocrResult.price > 0 ? String(ocrResult.price) : item.priceInput,
-          quantityInput:
-            ocrResult.quantity > 0
-              ? String(ocrResult.quantity)
-              : item.quantityInput,
-          unit: ocrResult.unit || item.unit,
-          promo: ocrResult.detectedPromo || item.promo,
-          barcode: ocrResult.barcode || item.barcode,
-          photoUri: ocrResult.photoUri || item.photoUri,
-        };
-      })
-    );
-    setCameraModal((prev) => ({ ...prev, visible: false }));
-  };
-
-  /** 一鍵儲存商品價格至本機「底價筆記本」 (自動帶入當天日期、真實 GPS 經緯度與賣場名稱、拍攝的價標照片縮圖) */
+  /** 一鍵儲存商品價格至本機「底價筆記本」 (自動帶入當天日期、真實 GPS 經緯度與賣場名稱) */
   const handleSaveToNotebook = (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
     const calc = calculationResults[itemId];
@@ -304,7 +281,7 @@ export default function AppMainScreen() {
     const newRecord: PriceHistoryRecord = {
       id: `rec-${Date.now()}`,
       productName: item.title.trim() || '未命名商品',
-      barcode: item.barcode || null,
+      barcode: null,
       storeName: currentStore,
       latitude: currentCoords.latitude ?? fallbackGeo.latitude,
       longitude: currentCoords.longitude ?? fallbackGeo.longitude,
@@ -314,7 +291,7 @@ export default function AppMainScreen() {
       quantity: calc.totalQuantity,
       unit: item.unit,
       unitPrice: calc.unitPrice,
-      photoUri: item.photoUri || null,
+      photoUri: null,
       recordedAt: todayStr,
       isHistoricalLowest: true,
     };
@@ -322,7 +299,7 @@ export default function AppMainScreen() {
     setHistoryRecords((prev) => [newRecord, ...prev]);
     Alert.alert(
       '✅ 已存入底價筆記本',
-      `商品：${newRecord.productName}\n賣場：${newRecord.storeName} (${todayStr})\nGPS座標：${newRecord.latitude?.toFixed(4)}, ${newRecord.longitude?.toFixed(4)}\n折後實付：$${Math.round(newRecord.effectivePrice)} (${newRecord.quantity}${newRecord.unit})`
+      `商品：${newRecord.productName}\n賣場：${newRecord.storeName} (${todayStr})\n折後實付：$${Math.round(newRecord.effectivePrice)} (${newRecord.quantity}${newRecord.unit})`
     );
   };
 
@@ -437,17 +414,9 @@ export default function AppMainScreen() {
                   )
                 }
                 onRemoveItem={handleRemoveItem}
-                onOpenCameraOcr={(id) =>
-                  setCameraModal({
+                onOpenMagnifier={(id) =>
+                  setMagnifierModal({
                     visible: true,
-                    mode: 'OCR',
-                    targetItemId: id,
-                  })
-                }
-                onOpenBarcodeScan={(id) =>
-                  setCameraModal({
-                    visible: true,
-                    mode: 'BARCODE',
                     targetItemId: id,
                   })
                 }
@@ -456,7 +425,7 @@ export default function AppMainScreen() {
             ))}
           </ScrollView>
 
-          {/* 下半部 45% 單手拇指操作熱區：+ 新增比價商品、真實相機拍價標與大型數字鍵盤 */}
+          {/* 下半部 45% 單手拇指操作熱區：+ 新增比價商品、🔍 放大鏡看標價與大型數字鍵盤 */}
           <CustomNumericKeypad
             activeInput={activeInput}
             activeCardTitle={activeCardTitle}
@@ -466,9 +435,8 @@ export default function AppMainScreen() {
             onNextField={handleNextField}
             onAddProduct={handleAddProduct}
             onQuickCameraSimulate={() =>
-              setCameraModal({
+              setMagnifierModal({
                 visible: true,
-                mode: 'OCR',
                 targetItemId: activeInput?.itemId || items[0].id,
               })
             }
@@ -491,8 +459,6 @@ export default function AppMainScreen() {
                 packCountInput: '1',
                 unit: record.unit,
                 promo: record.promoType,
-                barcode: record.barcode || undefined,
-                photoUri: record.photoUri || undefined,
               },
             ]);
             setActiveTab('COMPARE');
@@ -500,6 +466,7 @@ export default function AppMainScreen() {
           onDeleteRecord={(id) =>
             setHistoryRecords((prev) => prev.filter((r) => r.id !== id))
           }
+          onClearAllRecords={() => setHistoryRecords([])}
         />
       )}
 
@@ -540,18 +507,44 @@ export default function AppMainScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 真實相機拍標 OCR 與條碼掃描視窗 */}
-      <CameraSimulatorModal
-        visible={cameraModal.visible}
-        mode={cameraModal.mode}
-        targetCardTitle={
-          items.find((i) => i.id === cameraModal.targetItemId)?.title ||
-          '指定商品卡'
-        }
-        historyRecords={historyRecords}
-        onClose={() => setCameraModal((prev) => ({ ...prev, visible: false }))}
-        onApplyRecognition={handleApplyCameraResult}
-      />
+      {/* 長輩友善相機高倍率放大鏡視窗 */}
+      {magnifierTargetItem && (
+        <CameraSimulatorModal
+          visible={magnifierModal.visible}
+          targetCardTitle={magnifierTargetItem.title || '指定商品卡'}
+          currentPrice={magnifierTargetItem.priceInput}
+          currentQuantity={magnifierTargetItem.quantityInput}
+          currentUnit={magnifierTargetItem.unit}
+          onUpdatePrice={(val) =>
+            setItems((prev) =>
+              prev.map((it) =>
+                it.id === magnifierTargetItem.id
+                  ? { ...it, priceInput: val }
+                  : it
+              )
+            )
+          }
+          onUpdateQuantity={(val) =>
+            setItems((prev) =>
+              prev.map((it) =>
+                it.id === magnifierTargetItem.id
+                  ? { ...it, quantityInput: val }
+                  : it
+              )
+            )
+          }
+          onUpdateUnit={(u) =>
+            setItems((prev) =>
+              prev.map((it) =>
+                it.id === magnifierTargetItem.id ? { ...it, unit: u } : it
+              )
+            )
+          }
+          onClose={() =>
+            setMagnifierModal((prev) => ({ ...prev, visible: false }))
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
