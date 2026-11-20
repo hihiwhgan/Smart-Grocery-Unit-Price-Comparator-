@@ -98,11 +98,6 @@ export default function AppMainScreen() {
     targetItemId: 'item-1',
   });
 
-  /** 啟動時自動請求手機真實 GPS 定位並判斷所在賣場 */
-  useEffect(() => {
-    handleRealGpsLocate();
-  }, []);
-
   /** 呼叫手機真實 GPS 硬體定位並計算距離最近的賣場 */
   const handleRealGpsLocate = async () => {
     if (isLocatingGps) return;

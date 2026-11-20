@@ -903,14 +903,42 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       setTimeout(() => el.style.display = 'none', 2800);
     }
 
+    // 供 Android 原生端在相機權限剛授予後自動啟動放大鏡鏡頭串流
+    window.onNativeCameraPermissionGranted = async function() {
+      const modal = document.getElementById('magnifierModal');
+      if (modal && modal.style.display === 'flex') {
+        try {
+          if (activeStream) {
+            activeStream.getTracks().forEach(t => t.stop());
+          }
+          activeStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            },
+            audio: false
+          });
+          const videoEl = document.getElementById('magVideo');
+          videoEl.srcObject = activeStream;
+          setMagnifierZoom(currentZoomScale);
+        } catch (e) {}
+      }
+    };
+
     render();
-    setTimeout(() => { requestRealGps(); }, 600);
+    // 若先前已授予過 GPS 權限，啟動時靜默定位；若尚未授權則不強彈雙重對話框避免衝突
+    setTimeout(() => {
+      if (window.AndroidBridge && window.AndroidBridge.requestNativeGpsIfPermitted) {
+        window.AndroidBridge.requestNativeGpsIfPermitted();
+      }
+    }, 500);
   </script>
 </body>
 </html>
 EOF
 
-# 4. 建立原生 Android MainActivity.java：實作真實 GPS LocationManager、WebChromeClient 相機放大鏡鏡頭權限授權與原生 SQLite 儲存 Bridge
+# 4. 建立原生 Android MainActivity.java：修正首次啟動同時彈出多個權限對話框與 WebChromeClient 未授權 Camera 即 grant 導致的 Crash
 cat << 'EOF' > "${WORK_DIR}/src/com/smartgrocery/unitpricecomparator/MainActivity.java"
 package com.smartgrocery.unitpricecomparator;
 
@@ -934,12 +962,14 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
-    private static final int REQ_PERMISSIONS = 1001;
+    private static final int REQ_CAMERA_PERMISSION = 1002;
     private static final int REQ_GPS_PERMISSION = 1003;
 
     private WebView webView;
     private SQLiteDatabase sqliteDb;
     private LocationManager locationManager;
+    private boolean isRequestingPermission = false;
+    private PermissionRequest pendingWebPermissionRequest = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -960,13 +990,37 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new AndroidHardwareBridge(), "AndroidBridge");
         webView.setWebViewClient(new WebViewClient());
 
-        // 允許 WebView 使用真實手機相機作為高倍率放大鏡 (getUserMedia) 與真實 GPS
+        // 安全處理 WebView 相機放大鏡 (getUserMedia) 與 GPS 權限：必須先確認 Android OS 已授予 CAMERA 權限才可呼叫 request.grant()，否則會引發原生崩潰
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    request.grant(request.getResources());
-                }
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                try {
+                                    request.grant(request.getResources());
+                                } catch (Exception ignored) {
+                                }
+                            } else {
+                                pendingWebPermissionRequest = request;
+                                if (!isRequestingPermission) {
+                                    isRequestingPermission = true;
+                                    requestPermissions(
+                                        new String[]{Manifest.permission.CAMERA},
+                                        REQ_CAMERA_PERMISSION
+                                    );
+                                }
+                            }
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                            try {
+                                request.grant(request.getResources());
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    }
+                });
             }
 
             @Override
@@ -977,7 +1031,6 @@ public class MainActivity extends Activity {
         });
 
         setContentView(webView);
-        checkInitialRuntimePermissions();
         webView.loadUrl("file:///android_asset/index.html");
     }
 
@@ -993,20 +1046,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void checkInitialRuntimePermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
-                checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                    new String[]{
-                        Manifest.permission.CAMERA,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    },
-                    REQ_PERMISSIONS
-                );
-            }
+    private boolean hasLocationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return true;
         }
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+               checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     public class AndroidHardwareBridge {
@@ -1015,7 +1060,19 @@ public class MainActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    startRealNativeGpsLookup();
+                    startRealNativeGpsLookup(true);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void requestNativeGpsIfPermitted() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (hasLocationPermission()) {
+                        startRealNativeGpsLookup(false);
+                    }
                 }
             });
         }
@@ -1052,11 +1109,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void startRealNativeGpsLookup() {
+    private void startRealNativeGpsLookup(boolean promptIfMissing) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                    checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (!hasLocationPermission()) {
+                if (promptIfMissing && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !isRequestingPermission) {
+                    isRequestingPermission = true;
                     requestPermissions(
                         new String[]{
                             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -1064,8 +1121,8 @@ public class MainActivity extends Activity {
                         },
                         REQ_GPS_PERMISSION
                     );
-                    return;
                 }
+                return;
             }
 
             if (locationManager == null) {
@@ -1154,8 +1211,36 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_GPS_PERMISSION || requestCode == REQ_PERMISSIONS) {
-            startRealNativeGpsLookup();
+        isRequestingPermission = false;
+
+        if (requestCode == REQ_GPS_PERMISSION) {
+            if (hasLocationPermission()) {
+                startRealNativeGpsLookup(false);
+            } else {
+                sendGpsErrorToJs("未允許定位權限，可手動從下拉選單切換賣場");
+            }
+        } else if (requestCode == REQ_CAMERA_PERMISSION) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                if (pendingWebPermissionRequest != null) {
+                    try {
+                        pendingWebPermissionRequest.grant(pendingWebPermissionRequest.getResources());
+                    } catch (Exception ignored) {
+                    }
+                    pendingWebPermissionRequest = null;
+                }
+                if (webView != null) {
+                    webView.evaluateJavascript("if(window.onNativeCameraPermissionGranted)window.onNativeCameraPermissionGranted();", null);
+                }
+            } else {
+                if (pendingWebPermissionRequest != null) {
+                    try {
+                        pendingWebPermissionRequest.deny();
+                    } catch (Exception ignored) {
+                    }
+                    pendingWebPermissionRequest = null;
+                }
+            }
         }
     }
 
