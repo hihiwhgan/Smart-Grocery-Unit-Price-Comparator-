@@ -1,10 +1,11 @@
 /**
  * 賣場極簡比價王 - 單手拇指操作熱區：底部固定大型數字鍵盤與快捷操作台
  *
- * 設計規範：
- * - 將「+ 新增比價商品」、「開啟相機模擬辨識」與「大型數字鍵盤」集中配置於螢幕下半部 45% 區域。
- * - 大按鍵、高對比、支援單手推購物車時用大拇指盲按輸入。
- * - 提供「下一個欄位 / 下一張商品卡」一鍵跳轉，無需將手指移到螢幕上半部。
+ * 視覺風格：日系柔和極簡風（Soft Minimalist）+ 粗框空心按鈕（Thick Outline Hollow Buttons）
+ * - 「＋ 新增比價商品」：2.5px 深岩灰粗框空心膠囊按鈕 (`#3E423F`)
+ * - 「🔍 放大鏡看標價」：2.5px 鼠尾草綠粗框空心膠囊按鈕 (`#5B836B`)
+ * - 「清除」：2.5px 乾燥玫瑰粉粗框空心按鈕 (`#B86B6B`)
+ * - 「下一欄 ➔」：2.5px 鼠尾草綠粗框空心大按鍵 (`#5B836B`)
  */
 
 import React from 'react';
@@ -48,12 +49,12 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
 
   return (
     <View style={styles.bottomThumbDock}>
-      {/* 單手拇指快捷列：+ 新增比價商品 & 📷 相機智慧辨識模擬 */}
+      {/* 單手拇指快捷列（粗框空心膠囊按鈕）：+ 新增比價商品 & 🔍 放大鏡看標價 */}
       <View style={styles.thumbActionBar}>
         <TouchableOpacity
           style={styles.addProductBtn}
           onPress={onAddProduct}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
         >
           <Text style={styles.addProductBtnText}>＋ 新增比價商品</Text>
         </TouchableOpacity>
@@ -61,7 +62,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
         <TouchableOpacity
           style={styles.quickOcrBtn}
           onPress={onQuickCameraSimulate}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
         >
           <Text style={styles.quickOcrBtnText}>🔍 放大鏡看標價</Text>
         </TouchableOpacity>
@@ -69,7 +70,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
         <TouchableOpacity
           style={styles.collapseBtn}
           onPress={onToggleKeypad}
-          activeOpacity={0.85}
+          activeOpacity={0.8}
         >
           <Text style={styles.collapseBtnText}>
             {isExpanded ? '▼ 收起' : '▲ 鍵盤'}
@@ -87,7 +88,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
             </Text>
           </View>
 
-          {/* 大型高對比數字鍵盤 */}
+          {/* 大型柔和數字鍵盤 */}
           <View style={styles.keypadBody}>
             <View style={styles.numbersGrid}>
               {KEY_ROWS.map((row, rIdx) => (
@@ -95,10 +96,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
                   {row.map((k) => (
                     <TouchableOpacity
                       key={k}
-                      style={[
-                        styles.numKey,
-                        k === '⌫' && styles.backspaceKey,
-                      ]}
+                      style={styles.numKey}
                       onPress={() => {
                         if (k === '⌫') {
                           onBackspace();
@@ -115,7 +113,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
               ))}
             </View>
 
-            {/* 右側功能大按鍵區 */}
+            {/* 右側功能大按鍵區（粗框空心） */}
             <View style={styles.sideActionColumn}>
               <TouchableOpacity
                 style={styles.clearKey}
@@ -126,7 +124,7 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles. quickDoubleZeroKey}
+                style={styles.quickDoubleZeroKey}
                 onPress={() => onKeyPress('00')}
                 activeOpacity={0.75}
               >
@@ -150,70 +148,74 @@ export const CustomNumericKeypad: React.FC<CustomNumericKeypadProps> = ({
 
 const styles = StyleSheet.create({
   bottomThumbDock: {
-    backgroundColor: '#F3F4F6',
-    borderTopWidth: 2,
-    borderTopColor: '#BDBDBD',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 6,
+    backgroundColor: '#EAE7DF',
+    borderTopWidth: 1,
+    borderTopColor: '#DCD9D0',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   thumbActionBar: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   addProductBtn: {
-    flex: 1.3,
-    backgroundColor: '#111111',
-    borderRadius: 12,
-    paddingVertical: 11,
+    flex: 1.2,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderColor: '#3E423F',
+    borderRadius: 22,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addProductBtnText: {
-    color: '#FFFFFF',
+    color: '#2C302E',
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   quickOcrBtn: {
-    flex: 1.1,
-    backgroundColor: '#2E7D32',
-    borderRadius: 12,
-    paddingVertical: 11,
+    flex: 1.2,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
+    borderRadius: 22,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickOcrBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
+    color: '#466A54',
+    fontSize: 16,
+    fontWeight: '800',
   },
   collapseBtn: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#9CA39E',
+    borderRadius: 18,
+    paddingHorizontal: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   collapseBtnText: {
-    color: '#212121',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#4A4F4C',
+    fontSize: 13,
+    fontWeight: '700',
   },
   activeTargetBar: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
     marginBottom: 6,
   },
   activeTargetText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#333333',
+    color: '#2C302E',
   },
   highlightText: {
-    color: '#2E7D32',
+    color: '#466A54',
     fontWeight: '900',
   },
   keypadBody: {
@@ -222,69 +224,72 @@ const styles = StyleSheet.create({
   },
   numbersGrid: {
     flex: 3,
-    gap: 6,
+    gap: 7,
   },
   keyRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 7,
   },
   numKey: {
     flex: 1,
     height: 48,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#D0D0D0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCD9D0',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backspaceKey: {
-    backgroundColor: '#FFF3E0',
-    borderColor: '#FFB74D',
+    shadowColor: '#2C302E',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   numKeyText: {
     fontSize: 23,
-    fontWeight: '900',
-    color: '#111111',
+    fontWeight: '800',
+    color: '#2C302E',
   },
   sideActionColumn: {
     flex: 1.05,
-    gap: 6,
+    gap: 7,
   },
   clearKey: {
     height: 48,
-    backgroundColor: '#FFEBEE',
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#EF9A9A',
+    backgroundColor: '#EFECE6',
+    borderRadius: 12,
+    borderWidth: 2.5,
+    borderColor: '#B86B6B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearKeyText: {
     fontSize: 17,
-    fontWeight: '900',
-    color: '#D32F2F',
+    fontWeight: '800',
+    color: '#A65858',
   },
   quickDoubleZeroKey: {
     height: 48,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#D0D0D0',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCD9D0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   nextFieldKey: {
     flex: 1,
-    backgroundColor: '#2E7D32',
-    borderRadius: 10,
+    backgroundColor: '#E5EDE8',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
   },
   nextFieldKeyText: {
     fontSize: 17,
-    fontWeight: '900',
-    color: '#FFFFFF',
+    fontWeight: '800',
+    color: '#3F634D',
   },
 });

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 賣場極簡比價王 (Smart Grocery Unit Price Comparator) - v1.2.0
-# 功能升級：
-# 1. 取消拍價標與 OCR 辨識，改為長輩友善的「🔍 相機高倍率放大鏡」(支援 1x/2x/3x/5x 放大、定格畫面拿近看、高對比濾鏡、邊看邊輸入標價與容量)
-# 2. 底價紀錄分頁支援「手勢左滑刪除 (Swipe-Left to Delete)」以及頂部「🗑️ 一鍵清除全部紀錄」按鈕
+# 賣場極簡比價王 (Smart Grocery Unit Price Comparator) - v1.3.0
+# 功能與視覺升級：
+# 1. 日系無印柔和極簡風格（暖米白 #F7F6F2 底色、莫蘭迪鼠尾草綠 #5B836B、乾燥玫瑰粉 #B86B6B）
+# 2. 所有實心按鈕改為「粗框空心按鈕 (2.5px Thick Outline Hollow Buttons)」
+# 3. 真實 GPS 定位直接顯示「賣場品牌 + 分店名稱 / 路名」（結合 Android 原生 Geocoder 逆地理編碼與全台各縣市賣場座標庫），不再顯示經緯度數字
 
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/home/antigravity/android-sdk}}"
 BUILD_TOOLS="${SDK_ROOT}/build-tools/34.0.0"
@@ -29,13 +30,13 @@ mkdir -p "${WORK_DIR}/compiled_res"
 mkdir -p "${WORK_DIR}/classes"
 mkdir -p "${WORK_DIR}/dex"
 
-# 1. 建立 AndroidManifest.xml (包含真實相機放大鏡、手電筒補光、真實 GPS 定位權限)
+# 1. 建立 AndroidManifest.xml
 cat << 'EOF' > "${WORK_DIR}/AndroidManifest.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.smartgrocery.unitpricecomparator"
-    android:versionCode="3"
-    android:versionName="1.2.0">
+    android:versionCode="4"
+    android:versionName="1.3.0">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
 
@@ -70,7 +71,7 @@ cat << 'EOF' > "${WORK_DIR}/AndroidManifest.xml"
 </manifest>
 EOF
 
-# 2. 建立高對比綠色皇冠向量圖示 (@drawable/ic_launcher)
+# 2. 建立柔和鼠尾草綠皇冠向量圖示 (@drawable/ic_launcher)
 cat << 'EOF' > "${WORK_DIR}/res/drawable/ic_launcher.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -79,10 +80,10 @@ cat << 'EOF' > "${WORK_DIR}/res/drawable/ic_launcher.xml"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#2E7D32"
+        android:fillColor="#5B836B"
         android:pathData="M0,0h108v108h-108z"/>
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#F7F6F2"
         android:pathData="M24,74L84,74L84,82L24,82ZM24,66L30,36L45,52L54,30L63,52L78,36L84,66Z"/>
 </vector>
 EOF
@@ -94,7 +95,7 @@ cat << 'EOF' > "${WORK_DIR}/res/values/strings.xml"
 </resources>
 EOF
 
-# 3. 建立整合「長輩友善真實相機放大鏡」與「左滑刪除 + 一鍵清除底價紀錄」的前端介面
+# 3. 建立「日系柔和極簡風 + 粗框空心按鈕 + GPS 賣場店名直接顯示」前端介面
 cat << 'EOF' > "${WORK_DIR}/assets/index.html"
 <!DOCTYPE html>
 <html lang="zh-Hant">
@@ -104,107 +105,415 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
   <title>賣場極簡比價王</title>
   <style>
     * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif; background: #FFFFFF; color: #111111; overflow: hidden; }
-    .app-shell { display: flex; flex-direction: column; width: 100%; height: 100%; }
-    .top-header { padding: 10px 14px; border-bottom: 2px solid #E5E7EB; background: #FFFFFF; flex-shrink: 0; }
-    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .app-title { font-size: 21px; font-weight: 900; color: #111111; }
-    .gps-sub { font-size: 12px; font-weight: 800; color: #2E7D32; margin-top: 2px; }
-    .btn-reset { background: #F3F4F6; border: 1.5px solid #D1D5DB; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 800; color: #1F2937; }
-    .store-bar { display: flex; gap: 6px; align-items: center; }
-    .store-select { flex: 1; background: #F9FAFB; border: 2px solid #111111; border-radius: 10px; padding: 7px 10px; font-size: 15px; font-weight: 900; color: #111111; }
-    .btn-gps { background: #E8F5E9; border: 2px solid #2E7D32; border-radius: 10px; padding: 7px 10px; font-size: 13px; font-weight: 900; color: #2E7D32; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", sans-serif;
+      background: #F7F6F2;
+      color: #2C302E;
+      overflow: hidden;
+    }
+    .app-shell { display: flex; flex-direction: column; width: 100%; height: 100%; background: #F7F6F2; }
 
-    .main-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #F3F4F6; }
-    .cards-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; }
-    .card { background: #FFFFFF; border: 2px solid #D1D5DB; border-radius: 16px; padding: 12px; margin-bottom: 12px; }
-    .card.winner { border: 3.5px solid #2E7D32; background: #F4FBF4; }
-    .winner-banner { background: #2E7D32; color: #FFFFFF; border-radius: 10px; padding: 6px 10px; text-align: center; font-size: 16px; font-weight: 900; margin-bottom: 8px; }
-    .card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-    .badge-num { background: #1B5E20; color: #FFFFFF; font-size: 13px; font-weight: 900; padding: 3px 7px; border-radius: 6px; }
-    .title-input { flex: 1; font-size: 17px; font-weight: 900; color: #111111; border: none; border-bottom: 1.5px solid #D1D5DB; background: transparent; padding: 2px 0; user-select: text; }
-    .btn-magnifier { background: #E8F5E9; border: 2px solid #2E7D32; color: #1B5E20; border-radius: 10px; padding: 5px 10px; font-size: 14px; font-weight: 900; }
-    .btn-del { background: transparent; border: none; font-size: 18px; font-weight: 900; color: #9CA3AF; padding: 2px 6px; }
+    /* 頂部柔和卡片 Header */
+    .top-header-card {
+      margin: 8px 10px 4px 10px;
+      padding: 12px 14px;
+      background: #FFFFFF;
+      border: 1.5px solid #E2E0D8;
+      border-radius: 20px;
+      box-shadow: 0 2px 8px rgba(44, 48, 46, 0.04);
+      flex-shrink: 0;
+    }
+    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+    .app-title { font-size: 22px; font-weight: 900; color: #2C302E; letter-spacing: 0.3px; }
+    .btn-reset {
+      background: transparent;
+      border: 2px solid #8E9490;
+      border-radius: 16px;
+      padding: 5px 11px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #4A4F4C;
+    }
+    .store-bar { display: flex; gap: 8px; align-items: center; }
+    .store-select-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      background: #F7F6F2;
+      border: 1.5px solid #D5D3CA;
+      border-radius: 22px;
+      padding: 0 12px;
+      min-width: 0;
+    }
+    .store-select {
+      width: 100%;
+      background: transparent;
+      border: none;
+      padding: 8px 18px 8px 2px;
+      font-size: 15px;
+      font-weight: 800;
+      color: #2C302E;
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+      text-overflow: ellipsis;
+    }
+    .store-chevron {
+      position: absolute;
+      right: 12px;
+      pointer-events: none;
+      font-size: 14px;
+      font-weight: 900;
+      color: #5C615E;
+    }
+    /* 粗框空心 GPS 定位按鈕 */
+    .btn-gps {
+      background: transparent;
+      border: 2.5px solid #5B836B;
+      border-radius: 22px;
+      padding: 7px 13px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #466A54;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .gps-branch-tag {
+      margin-top: 6px;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #5B836B;
+      padding-left: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
 
-    .alert-box { border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; font-size: 14px; font-weight: 900; border: 1.5px solid; }
-    .alert-green { background: #E8F5E9; border-color: #2E7D32; color: #2E7D32; }
-    .alert-red { background: #FFEBEE; border-color: #D32F2F; color: #D32F2F; }
+    /* 主內容與商品比價卡片 */
+    .main-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #F7F6F2; }
+    .cards-scroll { flex: 1; overflow-y: auto; padding: 6px 10px 14px 10px; }
+    .card {
+      background: #FFFFFF;
+      border: 1.5px solid #E2E0D8;
+      border-radius: 20px;
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(44, 48, 46, 0.03);
+    }
+    .card.winner {
+      border: 2.5px solid #5B836B;
+      background: #FAFDFB;
+    }
+    /* 粗框空心最划算皇冠橫幅 */
+    .winner-banner {
+      background: #F2F7F4;
+      border: 2px solid #5B836B;
+      color: #466A54;
+      border-radius: 12px;
+      padding: 6px 10px;
+      text-align: center;
+      font-size: 15.5px;
+      font-weight: 900;
+      margin-bottom: 10px;
+    }
+    .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    /* 粗框空心編號 #1 */
+    .badge-num {
+      background: transparent;
+      border: 2px solid #5B836B;
+      color: #466A54;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+    .title-input {
+      flex: 1;
+      min-width: 0;
+      font-size: 18px;
+      font-weight: 800;
+      color: #2C302E;
+      border: none;
+      border-bottom: 1px solid #E6E4DC;
+      background: transparent;
+      padding: 2px 0;
+      user-select: text;
+    }
+    /* 粗框空心水平「🔍 放大鏡」膠囊按鈕（不折行） */
+    .btn-magnifier {
+      background: transparent;
+      border: 2px solid #3E423F;
+      color: #2C302E;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 14px;
+      font-weight: 800;
+      flex-shrink: 0;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-del {
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      font-weight: 700;
+      color: #9CA39E;
+      padding: 2px 6px;
+      flex-shrink: 0;
+    }
 
-    .inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-    .input-box { background: #FAFAFA; border: 2px solid #BDBDBD; border-radius: 12px; padding: 6px 10px; }
-    .input-box.focused { border: 3px solid #2E7D32; background: #FFFFFF; }
-    .input-lbl { font-size: 13px; font-weight: 800; color: #4B5563; }
+    .alert-box { border-radius: 10px; padding: 6px 10px; margin-bottom: 10px; font-size: 13.5px; font-weight: 800; border: 1.5px solid; }
+    .alert-green { background: #F2F7F4; border-color: #5B836B; color: #466A54; }
+    .alert-red { background: #FDF6F6; border-color: #B86B6B; color: #A65858; }
+
+    .inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .input-box {
+      background: #F7F6F2;
+      border: 1.5px solid #D5D3CA;
+      border-radius: 14px;
+      padding: 8px 12px;
+      transition: all 0.15s ease;
+    }
+    .input-box.focused {
+      border: 2.5px solid #5B836B;
+      background: #FFFFFF;
+      box-shadow: 0 0 0 3px rgba(91, 131, 107, 0.12);
+    }
+    .input-lbl { font-size: 13.5px; font-weight: 700; color: #5C615E; }
     .input-val-row { display: flex; align-items: baseline; margin-top: 2px; }
-    .input-val { font-size: 26px; font-weight: 900; color: #111111; }
-    .input-val.empty { color: #BDBDBD; }
-    .sub-discount { font-size: 12px; font-weight: 900; color: #2E7D32; }
+    .input-val { font-size: 26px; font-weight: 900; color: #2C302E; }
+    .input-val.empty { color: #B5B3AA; }
+    .sub-discount { font-size: 12px; font-weight: 800; color: #5B836B; margin-top: 2px; }
 
-    .pills-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
-    .pills-lbl { font-size: 13px; font-weight: 800; color: #4B5563; margin-right: 2px; }
-    .pill { padding: 4px 10px; border-radius: 14px; font-size: 14px; font-weight: 800; border: 1.5px solid #D1D5DB; background: #F3F4F6; color: #1F2937; }
-    .pill.active-unit { background: #111111; color: #FFFFFF; border-color: #111111; }
-    .pill.active-promo { background: #2E7D32; color: #FFFFFF; border-color: #2E7D32; border-radius: 8px; }
+    /* 單位與促銷選擇膠囊（粗框空心選取態） */
+    .pills-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+    .pills-lbl { font-size: 13.5px; font-weight: 700; color: #5C615E; margin-right: 2px; }
+    .pill {
+      padding: 4px 12px;
+      border-radius: 18px;
+      font-size: 14px;
+      font-weight: 700;
+      border: 1.5px solid #D5D3CA;
+      background: #F7F6F2;
+      color: #4A4F4C;
+    }
+    .pill.active-unit, .pill.active-promo {
+      background: #EDF3EF;
+      border: 2.5px solid #5B836B;
+      color: #3F634D;
+      font-weight: 900;
+    }
 
-    .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #E5E7EB; padding-top: 8px; margin-top: 4px; }
-    .unit-price-big { font-size: 22px; font-weight: 900; color: #111111; }
-    .unit-price-big.win { color: #2E7D32; }
-    .unit-price-big.lose { color: #D32F2F; }
-    .badge-lose { background: #FFEBEE; border: 1px solid #D32F2F; color: #D32F2F; font-size: 12px; font-weight: 900; padding: 2px 6px; border-radius: 6px; margin-left: 6px; }
-    .btn-save { background: #111111; color: #FFFFFF; border: none; border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 900; }
-    .btn-save:disabled { background: #BDBDBD; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #ECEAE2; padding-top: 9px; margin-top: 4px; }
+    .unit-price-big { font-size: 22px; font-weight: 900; color: #2C302E; }
+    .unit-price-big.win { color: #466A54; }
+    .unit-price-big.lose { color: #A65858; }
+    .badge-lose {
+      background: transparent;
+      border: 1.5px solid #B86B6B;
+      color: #A65858;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 8px;
+      margin-left: 6px;
+    }
+    /* 粗框空心「儲存此價格」按鈕 */
+    .btn-save {
+      background: transparent;
+      border: 2.5px solid #5B836B;
+      color: #466A54;
+      border-radius: 14px;
+      padding: 8px 13px;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .btn-save:disabled {
+      border-color: #D5D3CA;
+      color: #B5B3AA;
+    }
 
-    /* 下半部 45% 單手拇指操作熱區 */
-    .thumb-dock { background: #E5E7EB; border-top: 2px solid #9CA3AF; padding: 8px 10px; flex-shrink: 0; }
-    .thumb-actions { display: flex; gap: 6px; margin-bottom: 6px; }
-    .btn-add { flex: 1.15; background: #111111; color: #FFFFFF; border: none; border-radius: 12px; padding: 10px; font-size: 15px; font-weight: 900; }
-    .btn-cam { flex: 1.15; background: #2E7D32; color: #FFFFFF; border: none; border-radius: 12px; padding: 10px; font-size: 15px; font-weight: 900; }
-    .btn-fold { background: #D1D5DB; color: #111111; border: none; border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 900; }
-    .target-hint { background: #E8F5E9; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px; font-size: 13px; font-weight: 800; color: #1F2937; }
-    .keypad-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 6px; }
-    .num-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-    .key-btn { height: 44px; background: #FFFFFF; border: 1.5px solid #D1D5DB; border-radius: 10px; font-size: 22px; font-weight: 900; color: #111111; }
-    .key-back { background: #FFFBEB; border-color: #F59E0B; }
-    .side-keys { display: flex; flex-direction: column; gap: 5px; }
-    .key-clear { height: 44px; background: #FFEBEE; border: 1.5px solid #D32F2F; border-radius: 10px; font-size: 16px; font-weight: 900; color: #D32F2F; }
-    .key-next { flex: 1; background: #2E7D32; color: #FFFFFF; border: none; border-radius: 10px; font-size: 16px; font-weight: 900; }
+    /* 下半部 45% 單手拇指操作熱區（柔和暖灰米色 + 粗框空心按鈕） */
+    .thumb-dock {
+      background: #EAE7DF;
+      border-top: 1px solid #DCD9D0;
+      padding: 10px 10px 8px 10px;
+      flex-shrink: 0;
+    }
+    .thumb-actions { display: flex; gap: 8px; margin-bottom: 7px; }
+    /* 粗框空心「＋ 新增比價商品」 */
+    .btn-add {
+      flex: 1.15;
+      background: transparent;
+      border: 2.5px solid #3E423F;
+      color: #2C302E;
+      border-radius: 22px;
+      padding: 9px 10px;
+      font-size: 15px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    /* 粗框空心「🔍 放大鏡看標價」 */
+    .btn-cam {
+      flex: 1.15;
+      background: transparent;
+      border: 2.5px solid #5B836B;
+      color: #466A54;
+      border-radius: 22px;
+      padding: 9px 10px;
+      font-size: 15px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .btn-fold {
+      background: transparent;
+      border: 1.5px solid #9CA39E;
+      color: #4A4F4C;
+      border-radius: 18px;
+      padding: 9px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .target-hint {
+      padding: 2px 4px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #2C302E;
+    }
+    .keypad-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 7px; }
+    .num-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .key-btn {
+      height: 45px;
+      background: #FFFFFF;
+      border: 1px solid #DCD9D0;
+      border-radius: 12px;
+      font-size: 22px;
+      font-weight: 800;
+      color: #2C302E;
+      box-shadow: 0 1px 2px rgba(44, 48, 46, 0.04);
+    }
+    .key-btn:active { background: #F2F0E8; }
+    .side-keys { display: flex; flex-direction: column; gap: 6px; }
+    /* 粗框空心「清除」按鈕（乾燥玫瑰粉粗框） */
+    .key-clear {
+      height: 45px;
+      background: #EFECE6;
+      border: 2.5px solid #B86B6B;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #A65858;
+    }
+    /* 粗框空心「下一欄 →」大按鈕（鼠尾草綠粗框） */
+    .key-next {
+      flex: 1;
+      background: #E5EDE8;
+      border: 2.5px solid #5B836B;
+      color: #3F634D;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 800;
+    }
 
-    /* 底部雙分頁導覽列 */
-    .bottom-nav { display: grid; grid-template-columns: 1fr 1fr; height: 54px; border-top: 2px solid #111111; flex-shrink: 0; }
-    .nav-item { border: none; font-size: 17px; font-weight: 900; background: #F9FAFB; color: #4B5563; }
-    .nav-item.active { background: #111111; color: #FFFFFF; }
+    /* 底部柔和膠囊雙分頁導覽列 */
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 56px;
+      background: #EAE7DF;
+      padding: 5px 8px;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .nav-item {
+      border: none;
+      border-radius: 22px;
+      font-size: 16.5px;
+      font-weight: 800;
+      background: transparent;
+      color: #7A7E7B;
+    }
+    .nav-item.active {
+      background: #FFFFFF;
+      color: #2C302E;
+      font-weight: 900;
+      box-shadow: 0 1px 4px rgba(44, 48, 46, 0.07);
+    }
 
-    /* 底價紀錄分頁 + 左滑刪除 + 一鍵清除全部 */
-    .history-panel { flex: 1; overflow-y: auto; padding: 12px; background: #F3F4F6; }
+    /* 底價紀錄分頁 + 左滑刪除 + 粗框空心一鍵清除全部 */
+    .history-panel { flex: 1; overflow-y: auto; padding: 12px; background: #F7F6F2; }
     .history-top-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .swipe-tip { font-size: 13px; font-weight: 900; color: #374151; flex: 1; }
-    .btn-clear-all { background: #D32F2F; color: #FFFFFF; border: none; border-radius: 10px; padding: 9px 12px; font-size: 14px; font-weight: 900; flex-shrink: 0; }
-    .btn-clear-all:disabled { background: #BDBDBD; }
-    .search-input { width: 100%; border: 2px solid #111111; border-radius: 12px; padding: 10px 12px; font-size: 16px; font-weight: 800; margin-bottom: 10px; background: #FFFFFF; user-select: text; }
+    .swipe-tip { font-size: 13px; font-weight: 800; color: #5C615E; flex: 1; }
+    .btn-clear-all {
+      background: transparent;
+      border: 2.5px solid #B86B6B;
+      color: #A65858;
+      border-radius: 16px;
+      padding: 7px 12px;
+      font-size: 13.5px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .btn-clear-all:disabled { border-color: #D5D3CA; color: #B5B3AA; }
+    .search-input {
+      width: 100%;
+      border: 1.5px solid #D5D3CA;
+      border-radius: 16px;
+      padding: 10px 14px;
+      font-size: 15.5px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      background: #FFFFFF;
+      color: #2C302E;
+      user-select: text;
+    }
 
     /* 左滑刪除容器 */
-    .swipe-wrapper { position: relative; margin-bottom: 12px; border-radius: 16px; overflow: hidden; background: #D32F2F; }
-    .swipe-delete-bg { position: absolute; top: 0; bottom: 0; right: 0; width: 96px; background: #D32F2F; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; z-index: 1; }
-    .swipe-card-fg { position: relative; z-index: 2; background: #FFFFFF; border: 2px solid #D1D5DB; border-radius: 16px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; transition: transform 0.18s ease-out; touch-action: pan-y; }
+    .swipe-wrapper { position: relative; margin-bottom: 12px; border-radius: 18px; overflow: hidden; background: #C87A7A; }
+    .swipe-delete-bg { position: absolute; top: 0; bottom: 0; right: 0; width: 96px; background: #C87A7A; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; z-index: 1; }
+    .swipe-card-fg { position: relative; z-index: 2; background: #FFFFFF; border: 1.5px solid #E2E0D8; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; transition: transform 0.18s ease-out; touch-action: pan-y; }
 
-    .toast { position: fixed; top: 14px; left: 14px; right: 14px; background: #1B5E20; color: #FFFFFF; padding: 12px 14px; border-radius: 12px; font-size: 14px; font-weight: 900; z-index: 2000; box-shadow: 0 6px 16px rgba(0,0,0,0.25); display: none; }
+    .toast {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      background: #3E423F;
+      color: #F7F6F2;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 800;
+      z-index: 2000;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+      display: none;
+    }
 
-    /* 長輩友善「相機高倍率放大鏡」視窗 Modal */
-    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 1500; display: none; align-items: flex-end; justify-content: center; }
-    .modal-sheet { width: 100%; max-height: 95%; background: #FFFFFF; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 14px; overflow-y: auto; }
-    .mag-viewport { position: relative; width: 100%; height: 245px; background: #000000; border-radius: 18px; border: 4px solid #2E7D32; overflow: hidden; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; }
+    /* 長輩友善「相機高倍率放大鏡」視窗 Modal（粗框空心按鈕版） */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(44, 48, 46, 0.65); z-index: 1500; display: none; align-items: flex-end; justify-content: center; }
+    .modal-sheet { width: 100%; max-height: 95%; background: #F7F6F2; border-top-left-radius: 26px; border-top-right-radius: 26px; padding: 15px; overflow-y: auto; }
+    .mag-viewport { position: relative; width: 100%; height: 245px; background: #1E201F; border-radius: 18px; border: 3px solid #5B836B; overflow: hidden; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; }
     .mag-video { width: 100%; height: 100%; object-fit: cover; transform-origin: center center; transition: transform 0.15s ease-out; }
-    .mag-badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.72); color: #4ADE80; font-size: 15px; font-weight: 900; padding: 4px 10px; border-radius: 8px; pointer-events: none; }
-    .mag-crosshair { position: absolute; width: 84%; height: 120px; border: 2px dashed rgba(74,222,128,0.75); border-radius: 12px; pointer-events: none; }
+    .mag-badge { position: absolute; top: 10px; left: 10px; background: rgba(44,48,46,0.75); color: #DCECE2; font-size: 14px; font-weight: 800; padding: 4px 10px; border-radius: 10px; pointer-events: none; }
+    .mag-crosshair { position: absolute; width: 84%; height: 120px; border: 2px dashed rgba(220,236,226,0.75); border-radius: 12px; pointer-events: none; }
     .zoom-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
-    .zoom-btn { background: #F3F4F6; border: 2px solid #BDBDBD; border-radius: 12px; padding: 10px 4px; font-size: 16px; font-weight: 900; color: #111111; text-align: center; }
-    .zoom-btn.active { background: #2E7D32; border-color: #2E7D32; color: #FFFFFF; }
+    .zoom-btn { background: #FFFFFF; border: 1.5px solid #D5D3CA; border-radius: 14px; padding: 10px 4px; font-size: 15px; font-weight: 800; color: #4A4F4C; text-align: center; }
+    .zoom-btn.active { background: #EDF3EF; border: 2.5px solid #5B836B; color: #3F634D; font-weight: 900; }
     .mag-tools-row { display: flex; gap: 8px; margin-bottom: 10px; }
-    .btn-freeze { flex: 1.5; background: #111111; color: #FFFFFF; border: none; border-radius: 12px; padding: 12px; font-size: 16px; font-weight: 900; }
-    .btn-freeze.frozen { background: #D32F2F; }
-    .btn-contrast { flex: 1; background: #FFF8E1; border: 2px solid #FFB300; color: #111111; border-radius: 12px; padding: 12px; font-size: 15px; font-weight: 900; }
-    .btn-contrast.active { background: #FFB300; }
-    .mag-entry-box { background: #F9FAFB; border: 2px solid #D1D5DB; border-radius: 14px; padding: 10px; }
-    .mag-input { width: 100%; border: 2px solid #111111; border-radius: 10px; padding: 6px 10px; font-size: 24px; font-weight: 900; color: #111111; background: #FFFFFF; user-select: text; }
+    .btn-freeze { flex: 1.5; background: transparent; border: 2.5px solid #3E423F; color: #2C302E; border-radius: 16px; padding: 11px; font-size: 15px; font-weight: 800; }
+    .btn-freeze.frozen { border-color: #B86B6B; color: #A65858; background: #FDF6F6; }
+    .btn-contrast { flex: 1; background: transparent; border: 2.5px solid #5B836B; color: #466A54; border-radius: 16px; padding: 11px; font-size: 14.5px; font-weight: 800; }
+    .btn-contrast.active { background: #EDF3EF; }
+    .mag-entry-box { background: #FFFFFF; border: 1.5px solid #E2E0D8; border-radius: 16px; padding: 12px; }
+    .mag-input { width: 100%; border: 2px solid #5B836B; border-radius: 12px; padding: 6px 10px; font-size: 24px; font-weight: 900; color: #2C302E; background: #F7F6F2; user-select: text; }
   </style>
 </head>
 <body>
@@ -215,13 +524,12 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     <div class="modal-sheet">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
         <div>
-          <div style="font-size:21px;font-weight:900;color:#111111;" id="magModalTitle">🔍 價標放大鏡 (3x)</div>
-          <div style="font-size:13px;font-weight:800;color:#2E7D32;">對準貨架價標看清楚「標價」與「容量」，可定格畫面拿近看</div>
+          <div style="font-size:20px;font-weight:900;color:#2C302E;" id="magModalTitle">🔍 價標放大鏡 (3x)</div>
+          <div style="font-size:13px;font-weight:700;color:#5B836B;">對準貨架價標看清楚「標價」與「容量」，可定格畫面拿近看</div>
         </div>
-        <button onclick="closeMagnifier()" style="background:#F3F4F6;border:1.5px solid #D1D5DB;border-radius:10px;font-size:15px;font-weight:900;padding:6px 12px;">✕ 關閉</button>
+        <button onclick="closeMagnifier()" style="background:transparent;border:2px solid #8E9490;border-radius:14px;font-size:14px;font-weight:800;color:#4A4F4C;padding:5px 12px;">✕ 關閉</button>
       </div>
 
-      <!-- 即時放大鏡取景窗 -->
       <div class="mag-viewport">
         <video id="magVideo" class="mag-video" autoplay playsinline muted></video>
         <canvas id="magFrozenCanvas" class="mag-video" style="display:none;"></canvas>
@@ -229,7 +537,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         <div id="magBadgeText" class="mag-badge">🔍 目前放大 3x</div>
       </div>
 
-      <!-- 1x / 2x / 3x / 5x 放大倍率切換大按鈕 -->
       <div class="zoom-row">
         <button id="zBtn1" class="zoom-btn" onclick="setMagnifierZoom(1)">1x 原倍</button>
         <button id="zBtn2" class="zoom-btn" onclick="setMagnifierZoom(2)">2x 放大</button>
@@ -237,7 +544,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         <button id="zBtn5" class="zoom-btn" onclick="setMagnifierZoom(5)">5x 超大</button>
       </div>
 
-      <!-- 定格畫面 (不怕手抖) & 高對比清晰增強 -->
       <div class="mag-tools-row">
         <button id="btnFreezeFrame" class="btn-freeze" onclick="toggleFreezeMagnifier()">
           ❄️ 定格畫面 (拿近慢慢看)
@@ -247,22 +553,21 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         </button>
       </div>
 
-      <!-- 邊看放大鏡邊輸入標價與容量 -->
       <div class="mag-entry-box">
-        <div style="font-size:13px;font-weight:900;color:#1B5E20;margin-bottom:6px;" id="magSyncHint">
+        <div style="font-size:13px;font-weight:800;color:#466A54;margin-bottom:6px;" id="magSyncHint">
           ✍️ 看清楚後可直接在此輸入（自動同步至商品卡）：
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
           <div>
-            <div style="font-size:13px;font-weight:800;color:#374151;margin-bottom:2px;">總價格 (元)</div>
+            <div style="font-size:13px;font-weight:700;color:#5C615E;margin-bottom:2px;">總價格 (元)</div>
             <input id="magPriceInput" class="mag-input" type="number" inputmode="decimal" placeholder="0" oninput="syncFromMagnifier()" />
           </div>
           <div>
-            <div style="font-size:13px;font-weight:800;color:#374151;margin-bottom:2px;">總容量 / 數量</div>
+            <div style="font-size:13px;font-weight:700;color:#5C615E;margin-bottom:2px;">總容量 / 數量</div>
             <input id="magQtyInput" class="mag-input" type="number" inputmode="decimal" placeholder="0" oninput="syncFromMagnifier()" />
           </div>
         </div>
-        <button onclick="closeMagnifier()" style="width:100%;background:#2E7D32;color:#FFFFFF;border:none;border-radius:12px;padding:12px;font-size:17px;font-weight:900;">
+        <button onclick="closeMagnifier()" style="width:100%;background:#EDF3EF;color:#3F634D;border:2.5px solid #5B836B;border-radius:16px;padding:11px;font-size:16px;font-weight:900;">
           ✅ 看完填好，返回比價
         </button>
       </div>
@@ -270,26 +575,26 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
   </div>
 
   <div class="app-shell">
-    <div class="top-header">
+    <!-- 頂部柔和極簡卡片 Header -->
+    <div class="top-header-card">
       <div class="header-row">
-        <div style="flex:1;min-width:0;margin-right:8px;">
-          <div class="app-title">🛒 賣場極簡比價王</div>
-          <div id="gpsText" class="gps-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-            🛰️ 點擊右方「真實GPS」自動定位所在賣場
-          </div>
-        </div>
-        <button class="btn-reset" onclick="resetCards()">🔄 清空重算</button>
+        <div class="app-title">賣場極簡比價王</div>
+        <button class="btn-reset" onclick="resetCards()">清空重算</button>
       </div>
       <div class="store-bar">
-        <select id="storeSelect" class="store-select" onchange="setStore(this.value)">
-          <option value="全聯福利中心">📍 當前賣場：全聯福利中心</option>
-          <option value="好市多 Costco">📍 當前賣場：好市多 Costco</option>
-          <option value="家樂福 Carrefour">📍 當前賣場：家樂福 Carrefour</option>
-          <option value="大潤發 RT-Mart">📍 當前賣場：大潤發 RT-Mart</option>
-          <option value="愛買 a.mart">📍 當前賣場：愛買 a.mart</option>
-        </select>
-        <button class="btn-gps" onclick="requestRealGps()">🛰️ 真實GPS</button>
+        <div class="store-select-wrap">
+          <select id="storeSelect" class="store-select" onchange="setStoreManual(this.value)">
+            <option id="optPxmart" value="全聯福利中心">當前賣場：全聯福利中心</option>
+            <option id="optCostco" value="好市多 Costco">當前賣場：好市多 Costco</option>
+            <option id="optCarrefour" value="家樂福 Carrefour">當前賣場：家樂福 Carrefour</option>
+            <option id="optRtmart" value="大潤發 RT-Mart">當前賣場：大潤發 RT-Mart</option>
+            <option id="optAmart" value="愛買 a.mart">當前賣場：愛買 a.mart</option>
+          </select>
+          <span class="store-chevron">⌄</span>
+        </div>
+        <button class="btn-gps" onclick="requestRealGps()">GPS 定位</button>
       </div>
+      <div id="gpsText" class="gps-branch-tag" style="display:none;"></div>
     </div>
 
     <!-- 分頁 1：比價計算 -->
@@ -316,7 +621,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
               <button class="key-btn" onclick="k('3')">3</button>
               <button class="key-btn" onclick="k('.')">.</button>
               <button class="key-btn" onclick="k('0')">0</button>
-              <button class="key-btn key-back" onclick="back()">⌫</button>
+              <button class="key-btn" onclick="back()">⌫</button>
             </div>
             <div class="side-keys">
               <button class="key-clear" onclick="clr()">清除</button>
@@ -328,7 +633,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       </div>
     </div>
 
-    <!-- 分頁 2：底價紀錄 (支援左滑刪除 + 一鍵清除全部) -->
+    <!-- 分頁 2：底價紀錄 (支援左滑刪除 + 粗框空心一鍵清除全部) -->
     <div id="viewHistory" class="history-panel" style="display:none;">
       <div class="history-top-bar">
         <div class="swipe-tip">💡 提示：將紀錄「往左滑」即可刪除</div>
@@ -341,9 +646,10 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       <div id="historyList"></div>
     </div>
 
+    <!-- 底部柔和雙分頁導覽列 -->
     <div class="bottom-nav">
-      <button id="tabBtn1" class="nav-item active" onclick="switchTab(1)">🧮 比價計算 (<span id="cntCompare">2</span>)</button>
-      <button id="tabBtn2" class="nav-item" onclick="switchTab(2)">📒 底價紀錄 (<span id="cntHistory">3</span>)</button>
+      <button id="tabBtn1" class="nav-item active" onclick="switchTab(1)">比價計算 (<span id="cntCompare">2</span>)</button>
+      <button id="tabBtn2" class="nav-item" onclick="switchTab(2)">底價紀錄 (<span id="cntHistory">0</span>)</button>
     </div>
   </div>
 
@@ -357,29 +663,66 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       { id: 'DISCOUNT_80', label: '打8折', m: 0.8 }
     ];
 
+    // 全台主要縣市實體大賣場分店座標庫（涵蓋新竹/竹北、雙北、桃園、台中、嘉南、高屏）
     const STORE_FENCES = [
-      { storeName: '全聯福利中心', district: '台北大安延吉店', lat: 25.033964, lon: 121.543378 },
-      { storeName: '全聯福利中心', district: '新北板橋文化店', lat: 25.013200, lon: 121.463700 },
-      { storeName: '全聯福利中心', district: '台中市政店', lat: 24.161800, lon: 120.646900 },
-      { storeName: '全聯福利中心', district: '高雄巨蛋店', lat: 22.665100, lon: 120.303200 },
-      { storeName: '好市多 Costco', district: '內湖賣場', lat: 25.065321, lon: 121.575412 },
-      { storeName: '好市多 Costco', district: '中和賣場', lat: 25.001800, lon: 121.491200 },
-      { storeName: '好市多 Costco', district: '台中南屯賣場', lat: 24.132900, lon: 120.648800 },
-      { storeName: '好市多 Costco', district: '高雄大順賣場', lat: 22.656200, lon: 120.305900 },
-      { storeName: '家樂福 Carrefour', district: '桂林量販店', lat: 25.038200, lon: 121.506300 },
-      { storeName: '家樂福 Carrefour', district: '內湖量販店', lat: 25.068100, lon: 121.579400 },
-      { storeName: '家樂福 Carrefour', district: '台中青海店', lat: 24.163200, lon: 120.638100 },
-      { storeName: '家樂福 Carrefour', district: '高雄鼎山店', lat: 22.655100, lon: 120.320400 },
-      { storeName: '大潤發 RT-Mart', district: '中崙店', lat: 25.048190, lon: 121.544610 },
-      { storeName: '愛買 a.mart', district: '大直店', lat: 25.083120, lon: 121.556110 }
+      // 新竹市 / 竹北市
+      { storeName: '全聯福利中心', branch: '新竹中正店', lat: 24.8128, lon: 120.9642 },
+      { storeName: '全聯福利中心', branch: '新竹北大店', lat: 24.8065, lon: 120.9628 },
+      { storeName: '全聯福利中心', branch: '新竹光復店', lat: 24.7952, lon: 120.9968 },
+      { storeName: '全聯福利中心', branch: '竹北縣政店', lat: 24.8321, lon: 121.0124 },
+      { storeName: '好市多 Costco', branch: '新竹店', lat: 24.7916, lon: 121.0142 },
+      { storeName: '大潤發 RT-Mart', branch: '新竹湳雅店', lat: 24.8178, lon: 120.9746 },
+      { storeName: '大潤發 RT-Mart', branch: '新竹忠孝店', lat: 24.8034, lon: 120.9854 },
+      { storeName: '家樂福 Carrefour', branch: '竹北店', lat: 24.8268, lon: 121.0085 },
+      { storeName: '愛買 a.mart', branch: '新竹店', lat: 24.8002, lon: 120.9912 },
+
+      // 台北市 / 新北市
+      { storeName: '全聯福利中心', branch: '台北大安延吉店', lat: 25.033964, lon: 121.543378 },
+      { storeName: '全聯福利中心', branch: '新北板橋文化店', lat: 25.013200, lon: 121.463700 },
+      { storeName: '好市多 Costco', branch: '台北內湖店', lat: 25.065321, lon: 121.575412 },
+      { storeName: '好市多 Costco', branch: '新北中和店', lat: 25.001800, lon: 121.491200 },
+      { storeName: '好市多 Costco', branch: '新北汐止店', lat: 25.059800, lon: 121.638200 },
+      { storeName: '好市多 Costco', branch: '台北北投店', lat: 25.128200, lon: 121.468500 },
+      { storeName: '家樂福 Carrefour', branch: '台北桂林店', lat: 25.038200, lon: 121.506300 },
+      { storeName: '家樂福 Carrefour', branch: '台北內湖店', lat: 25.068100, lon: 121.579400 },
+      { storeName: '家樂福 Carrefour', branch: '新北新店店', lat: 24.976200, lon: 121.546100 },
+      { storeName: '大潤發 RT-Mart', branch: '台北中崙店', lat: 25.048190, lon: 121.544610 },
+      { storeName: '大潤發 RT-Mart', branch: '台北內湖店', lat: 25.064500, lon: 121.573900 },
+      { storeName: '愛買 a.mart', branch: '台北大直店', lat: 25.083120, lon: 121.556110 },
+      { storeName: '愛買 a.mart', branch: '板橋南雅店', lat: 24.996800, lon: 121.458100 },
+
+      // 桃園市
+      { storeName: '好市多 Costco', branch: '桃園南崁店', lat: 25.055800, lon: 121.287200 },
+      { storeName: '好市多 Costco', branch: '桃園中壢店', lat: 24.957600, lon: 121.163200 },
+      { storeName: '家樂福 Carrefour', branch: '桃園經國店', lat: 25.016800, lon: 121.304500 },
+      { storeName: '大潤發 RT-Mart', branch: '桃園中壢店', lat: 24.959200, lon: 121.240800 },
+      { storeName: '愛買 a.mart', branch: '桃園店', lat: 24.989500, lon: 121.282500 },
+
+      // 台中市
+      { storeName: '全聯福利中心', branch: '台中市政店', lat: 24.161800, lon: 120.646900 },
+      { storeName: '好市多 Costco', branch: '台中南屯店', lat: 24.132900, lon: 120.648800 },
+      { storeName: '好市多 Costco', branch: '北台中店', lat: 24.184200, lon: 120.706800 },
+      { storeName: '家樂福 Carrefour', branch: '台中青海店', lat: 24.163200, lon: 120.638100 },
+      { storeName: '家樂福 Carrefour', branch: '台中文心店', lat: 24.146200, lon: 120.648200 },
+      { storeName: '大潤發 RT-Mart', branch: '台中忠明店', lat: 24.167800, lon: 120.668200 },
+      { storeName: '愛買 a.mart', branch: '台中復興店', lat: 24.119500, lon: 120.662400 },
+
+      // 嘉義 / 台南 / 高雄
+      { storeName: '好市多 Costco', branch: '嘉義店', lat: 23.501200, lon: 120.448500 },
+      { storeName: '好市多 Costco', branch: '台南店', lat: 23.005200, lon: 120.192400 },
+      { storeName: '家樂福 Carrefour', branch: '台南安平店', lat: 22.999200, lon: 120.181500 },
+      { storeName: '全聯福利中心', branch: '高雄巨蛋店', lat: 22.665100, lon: 120.303200 },
+      { storeName: '好市多 Costco', branch: '高雄大順店', lat: 22.656200, lon: 120.305900 },
+      { storeName: '好市多 Costco', branch: '高雄中華店', lat: 22.603500, lon: 120.304800 },
+      { storeName: '家樂福 Carrefour', branch: '高雄鼎山店', lat: 22.655100, lon: 120.320400 }
     ];
 
     let store = '全聯福利中心';
+    let currentBranchLabel = '';
     let lastGpsCoords = { lat: null, lon: null };
     let filterStore = 'ALL';
     let padOpen = true;
 
-    // 放大鏡狀態
     let activeStream = null;
     let currentMagnifierCardId = 'c1';
     let currentZoomScale = 3;
@@ -398,11 +741,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       }
       const local = JSON.parse(localStorage.getItem('smart_grocery_sqlite_v3') || 'null');
       if (Array.isArray(local)) return local;
-      return [
-        { id: 'h1', name: '舒潔三層抽取式衛生紙 (110抽x24包)', store: '全聯福利中心', price: 369, qty: 2640, unit: '抽', unitPrice: 369/2640, date: '2026-11-10' },
-        { id: 'h2', name: '科克蘭三層抽取衛生紙 (120抽x24包)', store: '好市多 Costco', price: 389, qty: 2880, unit: '抽', unitPrice: 389/2880, date: '2026-11-02' },
-        { id: 'h3', name: '瑞穗鮮乳家庭號 (全脂 1858ml)', store: '家樂福 Carrefour', price: 169, qty: 1858, unit: 'ml', unitPrice: 169/1858, date: '2026-11-14' }
-      ];
+      return [];
     }
 
     let history = loadInitialHistory();
@@ -430,7 +769,23 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
     }
 
-    window.onRealGpsLocationReceived = function(lat, lon) {
+    function updateStoreSelectDisplay(storeName, branchText) {
+      const selectEl = document.getElementById('storeSelect');
+      selectEl.value = storeName;
+      const options = selectEl.options;
+      for (let i = 0; i < options.length; i++) {
+        const val = options[i].value;
+        const shortName = val.split(' ')[0];
+        if (val === storeName && branchText) {
+          options[i].textContent = `當前賣場：${shortName}（${branchText}）`;
+        } else {
+          options[i].textContent = `當前賣場：${val}`;
+        }
+      }
+    }
+
+    // 接收來自 Android 原生 LocationManager + Geocoder 的定位與真實路名/店名（直接顯示店名，不顯示經緯度數字）
+    window.onRealGpsLocationReceived = function(lat, lon, nativeAddressArea) {
       lastGpsCoords = { lat, lon };
       let nearest = STORE_FENCES[0];
       let minDist = Infinity;
@@ -442,30 +797,51 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         }
       }
       store = nearest.storeName;
-      document.getElementById('storeSelect').value = store;
-      const distTxt = minDist >= 1000 ? (minDist / 1000).toFixed(1) + 'km' : minDist + 'm';
-      document.getElementById('gpsText').textContent =
-        `🛰️ 真實GPS (${lat.toFixed(4)}, ${lon.toFixed(4)}) · 最近：${nearest.district} (${distTxt})`;
-      toast(`🛰️ 已取得真實 GPS 座標\n自動切換至最近賣場：${nearest.storeName}`);
+
+      // 若距離內建分店在 2.5 公里內，優先顯示精確分店名；若在其它區域且原生 Geocoder 有解析出縣市路名，則顯示該路名分店
+      let branchName = nearest.branch;
+      if (minDist > 2500 && nativeAddressArea && nativeAddressArea.length >= 2) {
+        branchName = nativeAddressArea + '門市';
+      }
+      currentBranchLabel = branchName;
+
+      updateStoreSelectDisplay(store, branchName);
+
+      const gpsEl = document.getElementById('gpsText');
+      const shortBrand = store.split(' ')[0];
+      gpsEl.style.display = 'flex';
+      gpsEl.textContent = `📍 已自動定位：${shortBrand} · ${branchName}`;
+      toast(`📍 已定位至：${shortBrand}（${branchName}）`);
     };
 
     window.onRealGpsError = function(errMsg) {
-      document.getElementById('gpsText').textContent = '⚠️ GPS 定位提示：' + errMsg;
+      const gpsEl = document.getElementById('gpsText');
+      gpsEl.style.display = 'flex';
+      gpsEl.textContent = '📍 ' + errMsg;
+      toast('📍 ' + errMsg);
     };
 
     function requestRealGps() {
-      document.getElementById('gpsText').textContent = '🛰️ 正在讀取手機真實 GPS 衛星定位...';
+      const gpsEl = document.getElementById('gpsText');
+      gpsEl.style.display = 'flex';
+      gpsEl.textContent = '📍 正在定位您所在的賣場店名...';
       if (window.AndroidBridge && window.AndroidBridge.requestNativeGps) {
         window.AndroidBridge.requestNativeGps();
         return;
       }
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          pos => window.onRealGpsLocationReceived(pos.coords.latitude, pos.coords.longitude),
+          pos => window.onRealGpsLocationReceived(pos.coords.latitude, pos.coords.longitude, ''),
           err => window.onRealGpsError(err.message || '請確認已開啟手機定位權限'),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       }
+    }
+
+    function setStoreManual(val) {
+      store = val;
+      currentBranchLabel = '';
+      updateStoreSelectDisplay(store, '');
     }
 
     // 開啟長輩友善「🔍 相機高倍率放大鏡」
@@ -524,7 +900,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       document.getElementById('magBadgeText').textContent =
         isMagnifierFrozen ? `❄️ 畫面已定格 (${scale}x 放大)` : `🔍 目前放大 ${scale}x`;
 
-      // 若硬體鏡頭支援原生光學/硬體 Zoom，同步設定硬體倍率
       if (activeStream) {
         try {
           const track = activeStream.getVideoTracks()[0];
@@ -613,12 +988,12 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
         const m = (PROMOS.find(x => x.id === it.promo) || PROMOS[0]).m;
         const eff = p * m;
         const up = eff / q;
-        const hist = history.find(h => it.title.length > 2 && h.name.includes(it.title.slice(0, 4)) && h.unit === it.unit);
+        const hist = history.find(h => it.title.length > 2 && !it.title.startsWith('商品') && h.name.includes(it.title.slice(0, 4)) && h.unit === it.unit);
         let alert = null;
         if (hist) {
           const diff = Math.round(eff - hist.unitPrice * q);
-          if (up < hist.unitPrice * 0.995) alert = { cls: 'alert-green', txt: '🔥 破歷史新低價！比上次在' + hist.store.split(' ')[0] + '買便宜 ' + Math.max(1, Math.abs(diff)) + ' 元' };
-          else if (up > hist.unitPrice * 1.005) alert = { cls: 'alert-red', txt: '🔴 比上次在' + hist.store.split(' ')[0] + '買的貴 ' + Math.max(1, Math.abs(diff)) + ' 元' };
+          if (up < hist.unitPrice * 0.995) alert = { cls: 'alert-green', txt: '🌿 破歷史新低價！比上次在' + hist.store.split(' ')[0] + '買便宜 ' + Math.max(1, Math.abs(diff)) + ' 元' };
+          else if (up > hist.unitPrice * 1.005) alert = { cls: 'alert-red', txt: '🔸 比上次在' + hist.store.split(' ')[0] + '買的貴 ' + Math.max(1, Math.abs(diff)) + ' 元' };
         }
         return { id: it.id, valid: true, eff, up, win: false, savePct: null, losePct: null, alert };
       });
@@ -670,7 +1045,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
               </div>
               <div class="input-box ${fq ? 'focused' : ''}" onclick="focusBox('${it.id}','qty')">
                 <div class="input-lbl">總容量 / 數量</div>
-                <div class="input-val-row"><span class="input-val ${it.qty ? '' : 'empty'}">${it.qty || '0'}</span><span style="font-size:15px;font-weight:800;margin-left:4px;">${it.unit}</span></div>
+                <div class="input-val-row"><span class="input-val ${it.qty ? '' : 'empty'}">${it.qty || '0'}</span><span style="font-size:15px;font-weight:700;color:#5C615E;margin-left:4px;">${it.unit}</span></div>
               </div>
             </div>
             <div class="pills-row">
@@ -683,8 +1058,8 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
             </div>
             <div class="card-footer">
               <div>
-                <div style="font-size:12px;font-weight:800;color:#6B7280;">換算單價</div>
-                ${r.valid ? `<span class="unit-price-big ${r.win ? 'win' : (r.losePct ? 'lose' : '')}">$${fmt(r.up)} <small style="font-size:13px;">/ ${it.unit}</small></span>${!r.win && r.losePct ? `<span class="badge-lose">貴 ${r.losePct}%</span>` : ''}` : `<span style="font-size:13px;font-weight:700;color:#9CA3AF;">請輸入價格與容量</span>`}
+                <div style="font-size:12px;font-weight:700;color:#7A7E7B;">換算單價</div>
+                ${r.valid ? `<span class="unit-price-big ${r.win ? 'win' : (r.losePct ? 'lose' : '')}">$${fmt(r.up)} <small style="font-size:13px;">/ ${it.unit}</small></span>${!r.win && r.losePct ? `<span class="badge-lose">貴 ${r.losePct}%</span>` : ''}` : `<span style="font-size:13px;font-weight:600;color:#9CA39E;">請輸入價格與容量</span>`}
               </div>
               <button class="btn-save" ${!r.valid ? 'disabled' : ''} onclick="savePrice('${it.id}')">💾 儲存此價格</button>
             </div>
@@ -754,12 +1129,14 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       const r = resMap[id];
       if (!it || !r || !r.valid) return;
       const today = new Date().toISOString().slice(0, 10);
+      const storeWithBranch = currentBranchLabel
+        ? `${store.split(' ')[0]}（${currentBranchLabel}）`
+        : store;
       const rec = {
         id: 'h' + Date.now(),
         name: it.title,
-        store,
-        lat: lastGpsCoords.lat,
-        lon: lastGpsCoords.lon,
+        store: storeWithBranch,
+        baseStore: store,
         price: Math.round(r.eff),
         qty: parseFloat(it.qty),
         unit: it.unit,
@@ -768,10 +1145,9 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       };
       history.unshift(rec);
       persistHistory();
-      toast('💾 已儲存至本機底價筆記本：' + rec.name + ' (' + store + ')');
+      toast('💾 已儲存至底價筆記本：' + rec.name + ' · ' + storeWithBranch);
       render();
     }
-    function setStore(v) { store = v; }
     function switchTab(n) {
       document.getElementById('viewCompare').style.display = n === 1 ? 'flex' : 'none';
       document.getElementById('viewHistory').style.display = n === 2 ? 'block' : 'none';
@@ -780,7 +1156,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       if (n === 2) renderHistory();
     }
 
-    // 刪除單筆底價紀錄
     function deleteSingleHistory(id) {
       history = history.filter(h => h.id !== id);
       persistHistory();
@@ -789,7 +1164,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       toast('🗑️ 已刪除該筆底價紀錄');
     }
 
-    // 一鍵清除全部底價紀錄
     function clearAllHistoryRecords() {
       if (history.length === 0) return;
       if (!confirm('確定要一鍵清除全部 ' + history.length + ' 筆底價紀錄嗎？')) return;
@@ -806,10 +1180,14 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       document.getElementById('storeFilters').innerHTML = stores.map(s => `<button class="pill ${filterStore === s ? 'active-promo' : ''}" onclick="filterStore='${s}';renderHistory()">${s === 'ALL' ? '全部賣場 (' + history.length + ')' : s.split(' ')[0]}</button>`).join('');
       document.getElementById('btnClearAllHistory').disabled = history.length === 0;
 
-      const list = history.filter(h => (filterStore === 'ALL' || h.store === filterStore) && (!q || h.name.toLowerCase().includes(q) || h.store.toLowerCase().includes(q)));
+      const list = history.filter(h => {
+        const matchStore = filterStore === 'ALL' || h.store === filterStore || h.baseStore === filterStore || h.store.includes(filterStore.split(' ')[0]);
+        const matchQ = !q || h.name.toLowerCase().includes(q) || h.store.toLowerCase().includes(q);
+        return matchStore && matchQ;
+      });
       const container = document.getElementById('historyList');
       if (list.length === 0) {
-        container.innerHTML = `<div style="text-align:center;padding:36px 16px;color:#6B7280;font-weight:800;font-size:16px;">目前沒有任何底價紀錄</div>`;
+        container.innerHTML = `<div style="text-align:center;padding:36px 16px;color:#7A7E7B;font-weight:700;font-size:15.5px;">目前沒有任何底價紀錄</div>`;
         return;
       }
 
@@ -821,16 +1199,16 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
           </div>
           <div class="swipe-card-fg" id="fg-${h.id}">
             <div style="flex:1;min-width:0;">
-              <div style="font-size:12px;font-weight:900;color:#2E7D32;">📍 ${h.store} · ${h.date}</div>
-              <div style="font-size:17px;font-weight:900;margin:3px 0;color:#111111;">${h.name}</div>
-              <div style="font-size:14px;font-weight:800;color:#374151;">實付 $${h.price} / ${h.qty} ${h.unit}</div>
-              <div style="display:inline-block;background:#E8F5E9;color:#2E7D32;font-size:14px;font-weight:900;padding:2px 8px;border-radius:6px;margin-top:4px;">
+              <div style="font-size:12.5px;font-weight:800;color:#466A54;">📍 ${h.store} · ${h.date}</div>
+              <div style="font-size:17px;font-weight:900;margin:3px 0;color:#2C302E;">${h.name}</div>
+              <div style="font-size:14px;font-weight:700;color:#5C615E;">實付 $${h.price} / ${h.qty} ${h.unit}</div>
+              <div style="display:inline-block;background:#EDF3EF;border:1.5px solid #5B836B;color:#3F634D;font-size:13.5px;font-weight:800;padding:2px 8px;border-radius:8px;margin-top:4px;">
                 歷史底價：$${fmt(h.unitPrice)} / ${h.unit}
               </div>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-              <button class="btn-cam" style="padding:8px 12px;font-size:13px;" onclick="loadFromHistory('${h.id}')">⚡ 帶入比價</button>
-              <span style="font-size:11px;font-weight:800;color:#9CA3AF;">⬅ 左滑刪除</span>
+              <button class="btn-cam" style="padding:7px 12px;font-size:13px;" onclick="loadFromHistory('${h.id}')">⚡ 帶入比價</button>
+              <span style="font-size:11px;font-weight:700;color:#9CA39E;">⬅ 左滑刪除</span>
             </div>
           </div>
         </div>
@@ -839,7 +1217,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       attachSwipeHandlers();
     }
 
-    // 綁定手勢左滑刪除 (Touch & Mouse Drag Swipe-Left to Delete)
     function attachSwipeHandlers() {
       const wrappers = document.querySelectorAll('.swipe-wrapper');
       wrappers.forEach(wrap => {
@@ -903,7 +1280,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
       setTimeout(() => el.style.display = 'none', 2800);
     }
 
-    // 供 Android 原生端在相機權限剛授予後自動啟動放大鏡鏡頭串流
     window.onNativeCameraPermissionGranted = async function() {
       const modal = document.getElementById('magnifierModal');
       if (modal && modal.style.display === 'flex') {
@@ -927,7 +1303,6 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
     };
 
     render();
-    // 若先前已授予過 GPS 權限，啟動時靜默定位；若尚未授權則不強彈雙重對話框避免衝突
     setTimeout(() => {
       if (window.AndroidBridge && window.AndroidBridge.requestNativeGpsIfPermitted) {
         window.AndroidBridge.requestNativeGpsIfPermitted();
@@ -938,7 +1313,7 @@ cat << 'EOF' > "${WORK_DIR}/assets/index.html"
 </html>
 EOF
 
-# 4. 建立原生 Android MainActivity.java：修正首次啟動同時彈出多個權限對話框與 WebChromeClient 未授權 Camera 即 grant 導致的 Crash
+# 4. 建立原生 Android MainActivity.java：整合 LocationManager + Android Geocoder 逆地理編碼（直接解析台灣縣市區與路名回傳給前端顯示分店名）
 cat << 'EOF' > "${WORK_DIR}/src/com/smartgrocery/unitpricecomparator/MainActivity.java"
 package com.smartgrocery.unitpricecomparator;
 
@@ -948,6 +1323,8 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -960,6 +1337,9 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import java.util.List;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int REQ_CAMERA_PERMISSION = 1002;
@@ -990,7 +1370,6 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new AndroidHardwareBridge(), "AndroidBridge");
         webView.setWebViewClient(new WebViewClient());
 
-        // 安全處理 WebView 相機放大鏡 (getUserMedia) 與 GPS 權限：必須先確認 Android OS 已授予 CAMERA 權限才可呼叫 request.grant()，否則會引發原生崩潰
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(final PermissionRequest request) {
@@ -1109,6 +1488,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String resolveAreaNameFromGeocoder(double lat, double lon) {
+        try {
+            Geocoder geocoder = new Geocoder(this, Locale.TRADITIONAL_CHINESE);
+            List<Address> list = geocoder.getFromLocation(lat, lon, 1);
+            if (list != null && !list.isEmpty()) {
+                Address a = list.get(0);
+                StringBuilder sb = new StringBuilder();
+                if (a.getLocality() != null) {
+                    sb.append(a.getLocality());
+                } else if (a.getSubAdminArea() != null) {
+                    sb.append(a.getSubAdminArea());
+                } else if (a.getAdminArea() != null) {
+                    sb.append(a.getAdminArea());
+                }
+                if (a.getThoroughfare() != null) {
+                    sb.append(a.getThoroughfare());
+                }
+                return sb.toString().replace("'", "");
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
     private void startRealNativeGpsLookup(boolean promptIfMissing) {
         try {
             if (!hasLocationPermission()) {
@@ -1126,7 +1529,7 @@ public class MainActivity extends Activity {
             }
 
             if (locationManager == null) {
-                sendGpsErrorToJs("無法存取系統 LocationManager");
+                sendGpsErrorToJs("無法存取定位服務");
                 return;
             }
 
@@ -1185,15 +1588,21 @@ public class MainActivity extends Activity {
     }
 
     private void sendGpsCoordsToJs(final double lat, final double lon) {
-        runOnUiThread(new Runnable() {
+        new Thread(new Runnable() {
             @Override
             public void run() {
-                if (webView != null) {
-                    String js = "window.onRealGpsLocationReceived(" + lat + ", " + lon + ");";
-                    webView.evaluateJavascript(js, null);
-                }
+                final String areaName = resolveAreaNameFromGeocoder(lat, lon);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (webView != null) {
+                            String js = "window.onRealGpsLocationReceived(" + lat + ", " + lon + ", '" + areaName + "');";
+                            webView.evaluateJavascript(js, null);
+                        }
+                    }
+                });
             }
-        });
+        }).start();
     }
 
     private void sendGpsErrorToJs(final String msg) {

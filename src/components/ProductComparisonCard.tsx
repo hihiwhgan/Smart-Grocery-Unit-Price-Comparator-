@@ -1,12 +1,10 @@
 /**
  * 賣場極簡比價王 - 單一商品比價卡片元件 (ProductComparisonCard)
  *
- * 設計規範：
- * - 白底黑字大字體、高對比視覺設計。
- * - 最划算選項（isWinner）：高飽和綠色（#2E7D32）粗邊框 + 皇冠圖示 + 「比第二名省 X%」醒目徽章。
- * - 較貴或歷史比對漲價：警示橘紅色（#D32F2F）標示。
- * - 取消複雜的拍價標與 OCR 辨識，改設長輩友善的「🔍 放大鏡」按鈕，一鍵開啟相機放大鏡看清楚微小標價與容量。
- * - 內建常用單位快捷選擇鈕（g、ml、抽、入、包）與促銷折扣一鍵換算（買一送一、第二件5折、85折、打8折）。
+ * 視覺風格：日系柔和極簡風（Soft Minimalist）+ 粗框空心按鈕（Thick Outline Hollow Buttons）
+ * - 背景與卡片：暖米白底搭配柔霧白卡片 (`#FFFFFF`) 與 `1.5px` 柔和暖灰邊框 (`#E2E0D8`)。
+ * - 主色調：莫蘭迪鼠尾草綠 (`#5B836B`)；警示/較貴：乾燥玫瑰粉 (`#B86B6B`)；文字：溫潤深炭灰 (`#2C302E`)。
+ * - 所有按鈕與選中標籤皆採用 `2.5px` 粗框空心設計，無沉重實心色塊。
  */
 
 import React from 'react';
@@ -69,7 +67,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         result.isWinner && styles.winnerCard,
       ]}
     >
-      {/* 勝出皇冠橫幅 (Winner Banner) */}
+      {/* 勝出皇冠橫幅 (粗框空心柔和綠橫幅) */}
       {result.isWinner && (
         <View style={styles.winnerBanner}>
           <Text style={styles.winnerBannerText}>
@@ -81,7 +79,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         </View>
       )}
 
-      {/* 頂部標題列：商品名稱 + 🔍 相機放大鏡按鈕 + 刪除鈕 */}
+      {/* 頂部標題列：粗框空心編號 + 商品名稱 + 粗框空心放大鏡按鈕 + 刪除鈕 */}
       <View style={styles.headerRow}>
         <View style={styles.titleBadge}>
           <Text style={styles.indexNumber}>#{index + 1}</Text>
@@ -91,10 +89,10 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
           value={item.title}
           onChangeText={(text) => onUpdateTitle(item.id, text)}
           placeholder={`商品 ${index + 1} 名稱`}
-          placeholderTextColor="#757575"
+          placeholderTextColor="#9CA39E"
         />
 
-        {/* 長輩友善相機放大鏡按鈕 */}
+        {/* 粗框空心水平「🔍 放大鏡」按鈕 */}
         <TouchableOpacity
           style={styles.magnifierButton}
           onPress={() => onOpenMagnifier(item.id)}
@@ -114,7 +112,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         )}
       </View>
 
-      {/* 歷史底價紅綠燈提醒列 */}
+      {/* 歷史底價柔和提醒列 */}
       {result.historyAlert && (
         <View
           style={[
@@ -132,9 +130,9 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
                 : styles.historyAlertTextSuccess,
             ]}
           >
-            {result.historyAlert.status === 'NEW_LOW' && '🔥 '}
+            {result.historyAlert.status === 'NEW_LOW' && '🌿 '}
             {result.historyAlert.status === 'CHEAPER_THAN_LAST' && '🟢 '}
-            {result.historyAlert.status === 'MORE_EXPENSIVE' && '🔴 '}
+            {result.historyAlert.status === 'MORE_EXPENSIVE' && '🔸 '}
             {result.historyAlert.message}
           </Text>
         </View>
@@ -155,7 +153,14 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         >
           <Text style={styles.inputLabel}>總價格 (元)</Text>
           <View style={styles.inputValueRow}>
-            <Text style={styles.currencyPrefix}>$</Text>
+            <Text
+              style={[
+                styles.currencyPrefix,
+                !item.priceInput && styles.placeholderText,
+              ]}
+            >
+              $
+            </Text>
             <Text
               style={[
                 styles.inputValueText,
@@ -198,9 +203,9 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 常用單位快捷選擇鈕 (g, ml, 抽, 入, 包) */}
+      {/* 常用單位快捷選擇鈕 (粗框空心選取態) */}
       <View style={styles.selectorRow}>
-        <Text style={styles.selectorLabel}>單位：</Text>
+        <Text style={styles.selectorLabel}>單位:</Text>
         <View style={styles.pillGroup}>
           {UNIT_OPTIONS.map((u) => {
             const active = item.unit === u;
@@ -224,9 +229,9 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         </View>
       </View>
 
-      {/* 賣場常見促銷折扣快捷鍵 */}
+      {/* 賣場常見促銷折扣快捷鍵 (粗框空心選取態) */}
       <View style={styles.selectorRow}>
-        <Text style={styles.selectorLabel}>促銷：</Text>
+        <Text style={styles.selectorLabel}>促銷:</Text>
         <View style={styles.pillGroup}>
           {PROMO_OPTIONS.map((p) => {
             const active = item.promo === p.id;
@@ -250,7 +255,7 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
         </View>
       </View>
 
-      {/* 底部即時換算結果列 + 一鍵儲存此價格按鈕 */}
+      {/* 底部即時換算結果列 + 粗框空心「儲存此價格」按鈕 */}
       <View style={styles.footerRow}>
         <View style={styles.unitPriceResultBox}>
           <Text style={styles.unitPriceCaption}>換算單價</Text>
@@ -290,7 +295,14 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
           disabled={!result.isValid}
           onPress={() => onSaveToNotebook(item.id)}
         >
-          <Text style={styles.saveButtonText}>💾 儲存此價格</Text>
+          <Text
+            style={[
+              styles.saveButtonText,
+              !result.isValid && styles.saveButtonTextDisabled,
+            ]}
+          >
+            💾 儲存此價格
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -300,134 +312,139 @@ export const ProductComparisonCard: React.FC<ProductComparisonCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E0D8',
+    padding: 15,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#2C302E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   winnerCard: {
-    borderWidth: 3.5,
-    borderColor: '#2E7D32',
-    backgroundColor: '#F4FBF4',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
+    backgroundColor: '#FAFDFB',
   },
   winnerBanner: {
-    backgroundColor: '#2E7D32',
-    borderRadius: 10,
+    backgroundColor: '#F2F7F4',
+    borderWidth: 2,
+    borderColor: '#5B836B',
+    borderRadius: 12,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
   winnerBannerText: {
-    color: '#FFFFFF',
-    fontSize: 17,
+    color: '#466A54',
+    fontSize: 16,
     fontWeight: '800',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 6,
+    marginBottom: 12,
+    gap: 8,
   },
   titleBadge: {
-    backgroundColor: '#1B5E20',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#5B836B',
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   indexNumber: {
-    color: '#FFFFFF',
+    color: '#5B836B',
     fontWeight: '800',
     fontSize: 15,
   },
   titleInput: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111111',
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#2C302E',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    paddingVertical: 2,
+    borderBottomColor: '#E6E4DC',
+    paddingVertical: 3,
   },
   magnifierButton: {
-    backgroundColor: '#E8F5E9',
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    borderRadius: 10,
-    paddingHorizontal: 11,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#3E423F',
+    borderRadius: 20,
+    paddingHorizontal: 12,
     paddingVertical: 6,
+    flexShrink: 0,
   },
   magnifierButtonText: {
-    color: '#1B5E20',
-    fontWeight: '900',
-    fontSize: 15,
+    color: '#2C302E',
+    fontWeight: '800',
+    fontSize: 14,
   },
   deleteButton: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
   },
   deleteButtonText: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#9E9E9E',
+    fontWeight: '700',
+    color: '#9CA39E',
   },
   historyAlertBox: {
-    borderRadius: 8,
+    borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 10,
     marginBottom: 10,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   historyAlertSuccess: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#2E7D32',
+    backgroundColor: '#F2F7F4',
+    borderColor: '#5B836B',
   },
   historyAlertDanger: {
-    backgroundColor: '#FFEBEE',
-    borderColor: '#D32F2F',
+    backgroundColor: '#FDF6F6',
+    borderColor: '#B86B6B',
   },
   historyAlertText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
   historyAlertTextSuccess: {
-    color: '#2E7D32',
+    color: '#466A54',
   },
   historyAlertTextDanger: {
-    color: '#D32F2F',
+    color: '#A65858',
   },
   inputsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   inputFieldBox: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
-    borderWidth: 2,
-    borderColor: '#BDBDBD',
-    borderRadius: 12,
+    backgroundColor: '#F7F6F2',
+    borderWidth: 1.5,
+    borderColor: '#D5D3CA',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   inputFieldBoxFocused: {
-    borderColor: '#2E7D32',
+    borderColor: '#5B836B',
     backgroundColor: '#FFFFFF',
-    borderWidth: 3,
+    borderWidth: 2.5,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#424242',
-    marginBottom: 2,
+    color: '#5C615E',
+    marginBottom: 3,
   },
   inputValueRow: {
     flexDirection: 'row',
@@ -436,27 +453,27 @@ const styles = StyleSheet.create({
   currencyPrefix: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111111',
+    color: '#2C302E',
     marginRight: 3,
   },
   inputValueText: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#111111',
+    color: '#2C302E',
   },
   placeholderText: {
-    color: '#BDBDBD',
+    color: '#B5B3AA',
   },
   unitSuffix: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#424242',
+    color: '#5C615E',
     marginLeft: 4,
   },
   discountedSubtext: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#2E7D32',
+    color: '#5B836B',
     marginTop: 2,
   },
   selectorRow: {
@@ -467,8 +484,8 @@ const styles = StyleSheet.create({
   selectorLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#424242',
-    width: 48,
+    color: '#5C615E',
+    width: 46,
   },
   pillGroup: {
     flex: 1,
@@ -477,53 +494,57 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   unitPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 1,
-    borderColor: '#D0D0D0',
+    borderRadius: 18,
+    backgroundColor: '#F7F6F2',
+    borderWidth: 1.5,
+    borderColor: '#D5D3CA',
   },
   unitPillActive: {
-    backgroundColor: '#111111',
-    borderColor: '#111111',
+    backgroundColor: '#EDF3EF',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
   },
   unitPillText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#333333',
+    color: '#4A4F4C',
   },
   unitPillTextActive: {
-    color: '#FFFFFF',
+    color: '#3F634D',
+    fontWeight: '900',
   },
   promoPill: {
-    paddingHorizontal: 9,
+    paddingHorizontal: 11,
     paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
+    borderRadius: 16,
+    backgroundColor: '#F7F6F2',
+    borderWidth: 1.5,
+    borderColor: '#D5D3CA',
   },
   promoPillActive: {
-    backgroundColor: '#2E7D32',
-    borderColor: '#2E7D32',
+    backgroundColor: '#EDF3EF',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
   },
   promoPillText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#333333',
+    color: '#4A4F4C',
   },
   promoPillTextActive: {
-    color: '#FFFFFF',
+    color: '#3F634D',
+    fontWeight: '900',
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#EEEEEE',
+    borderTopColor: '#ECEAE2',
     paddingTop: 10,
-    marginTop: 2,
+    marginTop: 4,
   },
   unitPriceResultBox: {
     flex: 1,
@@ -531,7 +552,7 @@ const styles = StyleSheet.create({
   unitPriceCaption: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#616161',
+    color: '#7A7E7B',
   },
   unitPriceNumbersRow: {
     flexDirection: 'row',
@@ -541,49 +562,54 @@ const styles = StyleSheet.create({
   unitPriceBigValue: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#111111',
+    color: '#2C302E',
   },
   winnerText: {
-    color: '#2E7D32',
+    color: '#466A54',
   },
   loserText: {
-    color: '#D32F2F',
+    color: '#A65858',
   },
   perUnitText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#424242',
+    color: '#5C615E',
   },
   extraCostBadge: {
-    backgroundColor: '#FFEBEE',
-    borderWidth: 1,
-    borderColor: '#D32F2F',
-    borderRadius: 6,
-    paddingHorizontal: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#B86B6B',
+    borderRadius: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
   },
   extraCostBadgeText: {
-    color: '#D32F2F',
-    fontSize: 13,
+    color: '#A65858',
+    fontSize: 12,
     fontWeight: '800',
   },
   waitingInputText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#9E9E9E',
+    color: '#9CA39E',
   },
   saveButton: {
-    backgroundColor: '#111111',
-    borderRadius: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
   },
   saveButtonDisabled: {
-    backgroundColor: '#BDBDBD',
+    borderColor: '#D5D3CA',
   },
   saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: '#466A54',
+    fontSize: 14,
     fontWeight: '800',
+  },
+  saveButtonTextDisabled: {
+    color: '#B5B3AA',
   },
 });

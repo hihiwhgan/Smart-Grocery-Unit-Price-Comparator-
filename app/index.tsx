@@ -1,14 +1,12 @@
 /**
  * 賣場極簡比價王 (Smart Grocery Unit Price Comparator) - 主程式入口
  *
- * 架構規範：
- * - 全 App 僅包含 2 個主要分頁（Bottom Navigation Bar）：
- *   1. 「比價計算」（預設首頁：多商品動態卡片列表、真實手機 GPS 賣場自動定位、長輩友善相機放大鏡按鈕、底部固定 45% 單手拇指操作區）
- *   2. 「底價紀錄」（個人底價筆記本：支援手勢左滑刪除、一鍵清除全部紀錄、賣場篩選器、關鍵字搜尋）
- * - 100% 離線優先（Offline-First）：連接本機 SQLite 資料庫 (`src/db/schema.ts`)。
+ * 視覺與功能規範：
+ * - 日系柔和極簡風（Soft Minimalist，暖米白底 `#F7F6F2`）+ 粗框空心按鈕（Thick Outline Hollow Buttons）。
+ * - GPS 定位直接顯示「賣場品牌 + 分店名稱」（例如：「全聯福利中心（新竹中正店）」），不再顯示經緯度數字。
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -40,22 +38,19 @@ import {
 import { calculateAllComparisons } from '../src/utils/calculator';
 
 export default function AppMainScreen() {
-  // 底部導覽列分頁 ('COMPARE' | 'HISTORY')
   const [activeTab, setActiveTab] = useState<'COMPARE' | 'HISTORY'>('COMPARE');
 
-  // 真實 GPS 自動定位賣場與經緯度座標狀態
+  // 當前賣場與 GPS 分店名稱顯示（直接顯示店名，不顯示經緯度）
   const [currentStore, setCurrentStore] = useState<StoreName>('全聯福利中心');
+  const [currentBranchDisplay, setCurrentBranchDisplay] =
+    useState<string>('全聯福利中心');
   const [currentCoords, setCurrentCoords] = useState<{
     latitude: number | null;
     longitude: number | null;
   }>({ latitude: null, longitude: null });
-  const [gpsStatusText, setGpsStatusText] = useState<string>(
-    '正在讀取手機 GPS 定位...'
-  );
   const [isLocatingGps, setIsLocatingGps] = useState<boolean>(false);
   const [showStorePicker, setShowStorePicker] = useState<boolean>(false);
 
-  // 本機 SQLite 底價筆記本紀錄狀態
   const [historyRecords, setHistoryRecords] = useState<PriceHistoryRecord[]>(
     INITIAL_SEED_RECORDS
   );
@@ -82,14 +77,12 @@ export default function AppMainScreen() {
     },
   ]);
 
-  // 當前下方固定大型數字鍵盤對焦的輸入框
   const [activeInput, setActiveInput] = useState<ActiveInputTarget | null>({
     itemId: 'item-1',
     field: 'priceInput',
   });
   const [isKeypadExpanded, setIsKeypadExpanded] = useState<boolean>(true);
 
-  // 長輩友善「相機高倍率放大鏡」視窗狀態
   const [magnifierModal, setMagnifierModal] = useState<{
     visible: boolean;
     targetItemId: string;
@@ -98,41 +91,33 @@ export default function AppMainScreen() {
     targetItemId: 'item-1',
   });
 
-  /** 呼叫手機真實 GPS 硬體定位並計算距離最近的賣場 */
+  /** 呼叫手機真實 GPS 硬體定位並直接帶出最近賣場與分店名稱 */
   const handleRealGpsLocate = async () => {
     if (isLocatingGps) return;
     setIsLocatingGps(true);
-    setGpsStatusText('🛰️ 正在透過手機 GPS 定位所在賣場...');
     try {
       const gpsRes = await LocationStoreService.detectCurrentStoreWithRealGps();
       setCurrentStore(gpsRes.storeName);
+      setCurrentBranchDisplay(gpsRes.fullStoreDisplay);
       setCurrentCoords({
         latitude: gpsRes.latitude,
         longitude: gpsRes.longitude,
       });
-      const distKm =
-        gpsRes.distanceMeters >= 1000
-          ? `${(gpsRes.distanceMeters / 1000).toFixed(1)}km`
-          : `${gpsRes.distanceMeters}m`;
-      setGpsStatusText(
-        `GPS (${gpsRes.latitude.toFixed(4)}, ${gpsRes.longitude.toFixed(4)}) · 最近：${gpsRes.districtLabel} (${distKm})`
-      );
     } catch (err: any) {
-      setGpsStatusText(
-        `GPS 提示：${err?.message || '尚未取得 GPS 訊號，可手動切換賣場'}`
+      Alert.alert(
+        'GPS 定位提示',
+        err?.message || '尚未取得 GPS 訊號，可手動點選賣場清單'
       );
     } finally {
       setIsLocatingGps(false);
     }
   };
 
-  // 即時計算所有商品的折後單價、勝出皇冠與歷史紅綠燈比對
   const calculationResults = useMemo(
     () => calculateAllComparisons(items, historyRecords),
     [items, historyRecords]
   );
 
-  // 取得當前對焦商品的名稱
   const activeCardTitle = useMemo(() => {
     if (!activeInput) return '商品 1';
     const idx = items.findIndex((i) => i.id === activeInput.itemId);
@@ -140,14 +125,12 @@ export default function AppMainScreen() {
     return items[idx].title || `商品 ${idx + 1}`;
   }, [activeInput, items]);
 
-  // 取得放大鏡對應的商品卡片
   const magnifierTargetItem = useMemo(
     () =>
       items.find((i) => i.id === magnifierModal.targetItemId) || items[0],
     [items, magnifierModal.targetItemId]
   );
 
-  /** 動態新增商品卡片（商品 3、商品 4...） */
   const handleAddProduct = () => {
     const nextNumber = items.length + 1;
     const defaultUnit: UnitType = items[0]?.unit || 'g';
@@ -166,13 +149,11 @@ export default function AppMainScreen() {
     setIsKeypadExpanded(true);
   };
 
-  /** 刪除單一商品卡片（至少保留 2 張卡片比價） */
   const handleRemoveItem = (id: string) => {
     if (items.length <= 2) return;
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  /** 重置清空所有比價卡片 */
   const handleResetAllCards = () => {
     const firstId = `item-${Date.now()}-1`;
     const secondId = `item-${Date.now()}-2`;
@@ -199,7 +180,6 @@ export default function AppMainScreen() {
     setActiveInput({ itemId: firstId, field: 'priceInput' });
   };
 
-  /** 大型數字鍵盤輸入處理 */
   const handleKeyPress = (key: string) => {
     if (!activeInput) return;
     setItems((prev) =>
@@ -247,7 +227,6 @@ export default function AppMainScreen() {
     );
   };
 
-  /** 單手「下一欄」循環跳轉：商品 1 價格 -> 商品 1 容量 -> 商品 2 價格 -> 商品 2 容量... */
   const handleNextField = () => {
     if (!activeInput || items.length === 0) return;
     if (activeInput.field === 'priceInput') {
@@ -262,7 +241,6 @@ export default function AppMainScreen() {
     });
   };
 
-  /** 一鍵儲存商品價格至本機「底價筆記本」 (自動帶入當天日期、真實 GPS 經緯度與賣場名稱) */
   const handleSaveToNotebook = (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
     const calc = calculationResults[itemId];
@@ -294,43 +272,38 @@ export default function AppMainScreen() {
     setHistoryRecords((prev) => [newRecord, ...prev]);
     Alert.alert(
       '✅ 已存入底價筆記本',
-      `商品：${newRecord.productName}\n賣場：${newRecord.storeName} (${todayStr})\n折後實付：$${Math.round(newRecord.effectivePrice)} (${newRecord.quantity}${newRecord.unit})`
+      `商品：${newRecord.productName}\n賣場：${currentBranchDisplay} (${todayStr})\n折後實付：$${Math.round(newRecord.effectivePrice)} (${newRecord.quantity}${newRecord.unit})`
     );
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F7F6F2" />
 
-      {/* 頂部狀態列：App 標題 + 真實 GPS 定位狀態 + 賣場切換 */}
-      <View style={styles.topHeader}>
+      {/* 頂部柔和極簡卡片 Header */}
+      <View style={styles.topHeaderCard}>
         <View style={styles.titleRow}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={styles.appTitle}>賣場極簡比價王</Text>
-            <Text style={styles.offlineStatusText} numberOfLines={1}>
-              ⚡ {gpsStatusText}
-            </Text>
-          </View>
-
+          <Text style={styles.appTitle}>賣場極簡比價王</Text>
           {activeTab === 'COMPARE' && (
             <TouchableOpacity
               style={styles.resetAllBtn}
               onPress={handleResetAllCards}
             >
-              <Text style={styles.resetAllBtnText}>🔄 清空重算</Text>
+              <Text style={styles.resetAllBtnText}>清空重算</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* GPS 當前賣場顯示與真實 GPS 重新定位按鈕 */}
+        {/* 當前賣場顯示（直接顯示店名）與粗框空心 GPS 定位按鈕 */}
         <View style={styles.gpsStoreBar}>
           <TouchableOpacity
             style={styles.storeSelectorButton}
             onPress={() => setShowStorePicker((v) => !v)}
           >
-            <Text style={styles.storeSelectorText}>
-              📍 當前賣場：{currentStore} ▾
+            <Text style={styles.storeSelectorText} numberOfLines={1}>
+              當前賣場：{currentBranchDisplay}
             </Text>
+            <Text style={styles.dropdownChevron}>⌄</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -339,7 +312,7 @@ export default function AppMainScreen() {
             disabled={isLocatingGps}
           >
             <Text style={styles.gpsRefreshBtnText}>
-              {isLocatingGps ? '🛰️ 定位中...' : '🛰️ 真實 GPS 定位'}
+              {isLocatingGps ? '定位中...' : 'GPS 定位'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -355,6 +328,7 @@ export default function AppMainScreen() {
                 ]}
                 onPress={() => {
                   setCurrentStore(store);
+                  setCurrentBranchDisplay(store.split(' ')[0]);
                   setShowStorePicker(false);
                 }}
               >
@@ -372,10 +346,9 @@ export default function AppMainScreen() {
         )}
       </View>
 
-      {/* 主內容區：根據底部導覽列切換「比價計算」或「底價紀錄」 */}
+      {/* 主內容區 */}
       {activeTab === 'COMPARE' ? (
         <View style={styles.compareWorkspace}>
-          {/* 上半部：多商品動態比價卡片捲動列表 */}
           <ScrollView
             style={styles.cardsScrollArea}
             contentContainerStyle={styles.cardsScrollContent}
@@ -420,7 +393,6 @@ export default function AppMainScreen() {
             ))}
           </ScrollView>
 
-          {/* 下半部 45% 單手拇指操作熱區：+ 新增比價商品、🔍 放大鏡看標價與大型數字鍵盤 */}
           <CustomNumericKeypad
             activeInput={activeInput}
             activeCardTitle={activeCardTitle}
@@ -465,7 +437,7 @@ export default function AppMainScreen() {
         />
       )}
 
-      {/* 底部導覽列 (Bottom Navigation Bar) - 僅包含 2 個主要分頁 */}
+      {/* 底部柔和膠囊導覽列 */}
       <View style={styles.bottomNavBar}>
         <TouchableOpacity
           style={[
@@ -480,7 +452,7 @@ export default function AppMainScreen() {
               activeTab === 'COMPARE' && styles.navTabTextActive,
             ]}
           >
-            🧮 比價計算 ({items.length})
+            比價計算 ({items.length})
           </Text>
         </TouchableOpacity>
 
@@ -497,12 +469,11 @@ export default function AppMainScreen() {
               activeTab === 'HISTORY' && styles.navTabTextActive,
             ]}
           >
-            📒 底價紀錄 ({historyRecords.length})
+            底價紀錄 ({historyRecords.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* 長輩友善相機高倍率放大鏡視窗 */}
       {magnifierTargetItem && (
         <CameraSimulatorModal
           visible={magnifierModal.visible}
@@ -547,45 +518,42 @@ export default function AppMainScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F6F2',
   },
-  topHeader: {
+  topHeaderCard: {
     backgroundColor: '#FFFFFF',
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: '#E5E7EB',
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E0D8',
   },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   appTitle: {
-    fontSize: 23,
+    fontSize: 24,
     fontWeight: '900',
-    color: '#111111',
-  },
-  offlineStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2E7D32',
-    marginTop: 2,
+    color: '#2C302E',
   },
   resetAllBtn: {
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#9CA39E',
+    borderRadius: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
   },
   resetAllBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#374151',
+    color: '#4A4F4C',
   },
   gpsStoreBar: {
     flexDirection: 'row',
@@ -594,92 +562,115 @@ const styles = StyleSheet.create({
   },
   storeSelectorButton: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F7F6F2',
     borderWidth: 1.5,
-    borderColor: '#111111',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderColor: '#D5D3CA',
+    borderRadius: 22,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
   storeSelectorText: {
     fontSize: 15,
-    fontWeight: '900',
-    color: '#111111',
+    fontWeight: '800',
+    color: '#2C302E',
+    flex: 1,
+  },
+  dropdownChevron: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#5C615E',
+    marginLeft: 6,
   },
   gpsRefreshBtn: {
-    backgroundColor: '#E8F5E9',
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
+    borderRadius: 22,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
   gpsRefreshBtnText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#2E7D32',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#466A54',
   },
   storeDropdown: {
     marginTop: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#111111',
+    backgroundColor: '#F7F6F2',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D5D3CA',
     padding: 6,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
   storeOptionItem: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#D5D3CA',
   },
   storeOptionItemActive: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: '#EDF3EF',
+    borderWidth: 2.5,
+    borderColor: '#5B836B',
   },
   storeOptionText: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#111111',
+    fontWeight: '700',
+    color: '#4A4F4C',
   },
   storeOptionTextActive: {
-    color: '#FFFFFF',
+    color: '#3F634D',
+    fontWeight: '900',
   },
   compareWorkspace: {
     flex: 1,
   },
   cardsScrollArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F7F6F2',
   },
   cardsScrollContent: {
-    padding: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
   bottomNavBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 2,
-    borderTopColor: '#111111',
-    height: 60,
+    backgroundColor: '#EAE7DF',
+    padding: 5,
+    height: 58,
+    alignItems: 'center',
   },
   navTabItem: {
     flex: 1,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
   },
   navTabItemActive: {
-    backgroundColor: '#111111',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#2C302E',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
   },
   navTabText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#4B5563',
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#7A7E7B',
   },
   navTabTextActive: {
-    color: '#FFFFFF',
+    color: '#2C302E',
+    fontWeight: '900',
   },
 });

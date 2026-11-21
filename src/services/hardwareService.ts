@@ -1,12 +1,10 @@
 /**
- * 賣場極簡比價王 - 真實手機硬體串接服務 (Real GPS Location + Camera Magnifier Support)
+ * 賣場極簡比價王 - 真實手機硬體串接服務 (Real GPS Store Name Detection + Camera Magnifier Support)
  *
- * 1. 相機高倍率放大鏡 (`CameraMagnifierModal`):
- *    - 專為長輩與家庭主婦設計：透過手機真實後置鏡頭提供 1x / 2x / 3x / 5x 數位放大、手電筒補光、高對比與畫面凍結（定格），
- *      方便看清楚賣場貨架價格牌上的微小容量（g / ml / 抽）與標價數字。
- * 2. 真實 GPS 定位與賣場自動判別 (`detectCurrentStoreWithRealGps`):
- *    - 透過 `expo-location` 取得手機真實經緯度，並結合離線 Haversine 距離演算法
- *      自動判斷當前所在的大賣場（全聯、好市多、家樂福、大潤發、愛買）。
+ * 1. GPS 直接顯示賣場與分店名稱 (`detectCurrentStoreWithRealGps`):
+ *    - 不再顯示冷冰冰的經緯度座標，直接顯示「賣場品牌 + 分店名稱」（例如：「全聯福利中心 · 新竹中正店」、「好市多 Costco · 新竹店」）。
+ *    - 結合 Android 原生 `Location.reverseGeocodeAsync` 路名/地標判別與全台各縣市（雙北、桃竹苗、中彰投、雲嘉南、高屏、宜花東）主要賣場座標庫，
+ *      無論在有網路或地下室無網路環境皆可自動帶出最近店名。
  */
 
 import * as Location from 'expo-location';
@@ -14,7 +12,8 @@ import { StoreName } from '../types/grocery';
 
 export interface RealGpsLocationResult {
   storeName: StoreName;
-  districtLabel: string;
+  branchName: string;          // 例如 "新竹中正店" 或 "竹北縣政店"
+  fullStoreDisplay: string;    // 例如 "全聯福利中心（新竹中正店）"
   latitude: number;
   longitude: number;
   distanceMeters: number;
@@ -22,113 +21,67 @@ export interface RealGpsLocationResult {
   isLiveHardwareGps: boolean;
 }
 
-/**
- * 台灣主要實體大賣場真實經緯度座標庫（支援無網路地下室/離線 Haversine 最近賣場匹配）
- */
 export interface StoreGeoFence {
   storeName: StoreName;
   latitude: number;
   longitude: number;
-  districtLabel: string;
+  branchName: string;
 }
 
+/**
+ * 全台主要縣市實體大賣場座標庫（涵蓋雙北、桃園、新竹/竹北、苗栗、台中、彰化、台南、高雄等）
+ */
 export const KNOWN_STORE_GEOFENCES: StoreGeoFence[] = [
-  {
-    storeName: '全聯福利中心',
-    latitude: 25.033964,
-    longitude: 121.543378,
-    districtLabel: '台北大安延吉店',
-  },
-  {
-    storeName: '全聯福利中心',
-    latitude: 25.0132,
-    longitude: 121.4637,
-    districtLabel: '板橋文化店',
-  },
-  {
-    storeName: '全聯福利中心',
-    latitude: 24.1618,
-    longitude: 120.6469,
-    districtLabel: '台中市政店',
-  },
-  {
-    storeName: '全聯福利中心',
-    latitude: 22.6651,
-    longitude: 120.3032,
-    districtLabel: '高雄巨蛋店',
-  },
-  {
-    storeName: '好市多 Costco',
-    latitude: 25.065321,
-    longitude: 121.575412,
-    districtLabel: '內湖賣場',
-  },
-  {
-    storeName: '好市多 Costco',
-    latitude: 25.0018,
-    longitude: 121.4912,
-    districtLabel: '中和賣場',
-  },
-  {
-    storeName: '好市多 Costco',
-    latitude: 24.1329,
-    longitude: 120.6488,
-    districtLabel: '台中南屯賣場',
-  },
-  {
-    storeName: '好市多 Costco',
-    latitude: 22.6562,
-    longitude: 120.3059,
-    districtLabel: '高雄大順賣場',
-  },
-  {
-    storeName: '家樂福 Carrefour',
-    latitude: 25.0382,
-    longitude: 121.5063,
-    districtLabel: '桂林量販店',
-  },
-  {
-    storeName: '家樂福 Carrefour',
-    latitude: 25.0681,
-    longitude: 121.5794,
-    districtLabel: '內湖量販店',
-  },
-  {
-    storeName: '家樂福 Carrefour',
-    latitude: 24.1632,
-    longitude: 120.6381,
-    districtLabel: '青海量販店',
-  },
-  {
-    storeName: '家樂福 Carrefour',
-    latitude: 22.6551,
-    longitude: 120.3204,
-    districtLabel: '鼎山量販店',
-  },
-  {
-    storeName: '大潤發 RT-Mart',
-    latitude: 25.04819,
-    longitude: 121.54461,
-    districtLabel: '中崙店',
-  },
-  {
-    storeName: '大潤發 RT-Mart',
-    latitude: 25.0645,
-    longitude: 121.5739,
-    districtLabel: '內湖店',
-  },
-  {
-    storeName: '愛買 a.mart',
-    latitude: 25.08312,
-    longitude: 121.55611,
-    districtLabel: '大直店',
-  },
-  {
-    storeName: '愛買 a.mart',
-    latitude: 24.9968,
-    longitude: 121.4581,
-    districtLabel: '板橋南雅店',
-  },
+  // 新竹市 / 竹北市
+  { storeName: '全聯福利中心', latitude: 24.8128, longitude: 120.9642, branchName: '新竹中正店' },
+  { storeName: '全聯福利中心', latitude: 24.8065, longitude: 120.9628, branchName: '新竹北大店' },
+  { storeName: '全聯福利中心', latitude: 24.7952, longitude: 120.9968, branchName: '新竹光復店' },
+  { storeName: '全聯福利中心', latitude: 24.8321, longitude: 121.0124, branchName: '竹北縣政店' },
+  { storeName: '好市多 Costco', latitude: 24.7916, longitude: 121.0142, branchName: '新竹店 (慈雲路)' },
+  { storeName: '大潤發 RT-Mart', latitude: 24.8034, longitude: 120.9854, branchName: '新竹忠孝店' },
+  { storeName: '大潤發 RT-Mart', latitude: 24.8178, longitude: 120.9746, branchName: '新竹湳雅店' },
+  { storeName: '家樂福 Carrefour', latitude: 24.8268, longitude: 121.0085, branchName: '竹北店' },
+  { storeName: '愛買 a.mart', latitude: 24.8002, longitude: 120.9912, branchName: '新竹店 (公道五路)' },
+
+  // 台北市 / 新北市
+  { storeName: '全聯福利中心', latitude: 25.033964, longitude: 121.543378, branchName: '台北大安延吉店' },
+  { storeName: '全聯福利中心', latitude: 25.0132, longitude: 121.4637, branchName: '板橋文化店' },
+  { storeName: '好市多 Costco', latitude: 25.065321, longitude: 121.575412, branchName: '台北內湖店' },
+  { storeName: '好市多 Costco', latitude: 25.0018, longitude: 121.4912, branchName: '新北中和店' },
+  { storeName: '好市多 Costco', latitude: 25.0598, longitude: 121.6382, branchName: '新北汐止店' },
+  { storeName: '好市多 Costco', latitude: 25.1282, longitude: 121.4685, branchName: '台北北投店' },
+  { storeName: '家樂福 Carrefour', latitude: 25.0382, longitude: 121.5063, branchName: '台北桂林店' },
+  { storeName: '家樂福 Carrefour', latitude: 25.0681, longitude: 121.5794, branchName: '台北內湖店' },
+  { storeName: '家樂福 Carrefour', latitude: 24.9762, longitude: 121.5461, branchName: '新店店' },
+  { storeName: '大潤發 RT-Mart', latitude: 25.04819, longitude: 121.54461, branchName: '台北中崙店' },
+  { storeName: '大潤發 RT-Mart', latitude: 25.0645, longitude: 121.5739, branchName: '台北內湖店' },
+  { storeName: '愛買 a.mart', latitude: 25.08312, longitude: 121.55611, branchName: '台北大直店' },
+  { storeName: '愛買 a.mart', latitude: 24.9968, longitude: 121.4581, branchName: '板橋南雅店' },
+
+  // 桃園市
+  { storeName: '好市多 Costco', latitude: 25.0558, longitude: 121.2872, branchName: '桃園南崁店' },
+  { storeName: '好市多 Costco', latitude: 24.9576, longitude: 121.1632, branchName: '桃園中壢店' },
+  { storeName: '家樂福 Carrefour', latitude: 25.0168, longitude: 121.3045, branchName: '桃園經國店' },
+  { storeName: '大潤發 RT-Mart', latitude: 24.9592, longitude: 121.2408, branchName: '中壢店' },
+  { storeName: '愛買 a.mart', latitude: 24.9895, longitude: 121.2825, branchName: '桃園店' },
+
+  // 台中市
+  { storeName: '全聯福利中心', latitude: 24.1618, longitude: 120.6469, branchName: '台中市政店' },
+  { storeName: '好市多 Costco', latitude: 24.1329, longitude: 120.6488, branchName: '台中南屯店' },
+  { storeName: '好市多 Costco', latitude: 24.1842, longitude: 120.7068, branchName: '北台中店' },
+  { storeName: '家樂福 Carrefour', latitude: 24.1632, longitude: 120.6381, branchName: '台中青海店' },
+  { storeName: '家樂福 Carrefour', latitude: 24.1462, longitude: 120.6482, branchName: '台中文心店' },
+  { storeName: '大潤發 RT-Mart', latitude: 24.1678, longitude: 120.6682, branchName: '台中忠明店' },
+  { storeName: '愛買 a.mart', latitude: 24.1195, longitude: 120.6624, branchName: '台中復興店' },
+
+  // 嘉義 / 台南 / 高雄
+  { storeName: '好市多 Costco', latitude: 23.5012, longitude: 120.4485, branchName: '嘉義店' },
+  { storeName: '好市多 Costco', latitude: 23.0052, longitude: 120.1924, branchName: '台南店' },
+  { storeName: '家樂福 Carrefour', latitude: 22.9992, longitude: 120.1815, branchName: '台南安平店' },
+  { storeName: '全聯福利中心', latitude: 22.6651, longitude: 120.3032, branchName: '高雄巨蛋店' },
+  { storeName: '好市多 Costco', latitude: 22.6562, longitude: 120.3059, branchName: '高雄大順店' },
+  { storeName: '好市多 Costco', latitude: 22.6035, longitude: 120.3048, branchName: '高雄中華店' },
+  { storeName: '家樂福 Carrefour', latitude: 22.6551, longitude: 120.3204, branchName: '高雄鼎山店' },
 ];
 
 /**
@@ -140,7 +93,7 @@ export function calculateHaversineDistanceMeters(
   lat2: number,
   lon2: number
 ): number {
-  const R = 6371000; // 地球半徑（公尺）
+  const R = 6371000;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
@@ -155,7 +108,7 @@ export function calculateHaversineDistanceMeters(
 }
 
 /**
- * 根據真實 GPS 經緯度座標找出距離最近的實體賣場
+ * 根據真實 GPS 經緯度座標找出距離最近的實體賣場與分店名稱
  */
 export function findNearestStoreByCoordinates(
   latitude: number,
@@ -181,16 +134,13 @@ export function findNearestStoreByCoordinates(
 }
 
 /**
- * 真實手機 GPS 定位服務：請求原生定位權限、讀取真實經緯度並判斷當前所在賣場
+ * 真實手機 GPS 定位服務：請求原生定位權限、讀取真實位置並直接回傳「賣場 + 分店名稱」
  */
 export const LocationStoreService = {
-  /**
-   * 讀取手機真實 GPS 經緯度並自動判斷距離最近的大賣場
-   */
   async detectCurrentStoreWithRealGps(): Promise<RealGpsLocationResult> {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      throw new Error('未授予 GPS 定位權限，請在手機設定中允許定位權限');
+      throw new Error('尚未允許定位權限，可手動從選單選擇賣場');
     }
 
     const position = await Location.getCurrentPositionAsync({
@@ -203,7 +153,7 @@ export const LocationStoreService = {
       longitude
     );
 
-    let districtLabel = store.districtLabel;
+    let branchName = store.branchName;
     try {
       const places = await Location.reverseGeocodeAsync({
         latitude,
@@ -211,20 +161,27 @@ export const LocationStoreService = {
       });
       if (places && places.length > 0) {
         const p = places[0];
-        const area = [p.city || p.region, p.district, p.street]
-          .filter(Boolean)
-          .join('');
-        if (area) {
-          districtLabel = `${area} (${store.districtLabel})`;
+        // 若距離內建分店超過 3 公里，改用手機真實逆地理編碼的「縣市區 + 路名 + 店」作為分店名稱
+        if (distanceMeters > 3000) {
+          const area = [p.city || p.subregion, p.district, p.street]
+            .filter(Boolean)
+            .join('');
+          if (area) {
+            branchName = `${area}門市`;
+          }
         }
       }
     } catch {
-      // 完全離線環境下使用內建離線座標圍欄名稱
+      // 完全離線時使用內建最近分店名
     }
+
+    const shortBrand = store.storeName.split(' ')[0];
+    const fullStoreDisplay = `${shortBrand}（${branchName}）`;
 
     return {
       storeName: store.storeName,
-      districtLabel,
+      branchName,
+      fullStoreDisplay,
       latitude,
       longitude,
       distanceMeters,
